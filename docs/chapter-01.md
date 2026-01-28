@@ -1860,7 +1860,189 @@ collaborative-editor/
 
 ---
 
-## 八、下一章预告
+## 八、验证本章实现
+
+### 8.1 检查环境
+
+运行环境检查脚本：
+
+```bash
+node scripts/check-env.js
+```
+
+**预期输出：**
+```
+🔍 检查开发环境...
+
+✅ Node.js: 18.x.x (>= 18.0)
+✅ pnpm: 8.x.x (>= 8.0)
+
+==================================================
+
+✅ 环境检查通过！可以开始开发了。
+```
+
+### 8.2 安装依赖
+
+```bash
+pnpm install
+```
+
+**预期结果：**
+- 安装成功，无报错
+- 生成 `pnpm-lock.yaml` 文件
+- 生成 `node_modules` 目录
+
+### 8.3 启动后端服务
+
+```bash
+pnpm dev:server
+```
+
+**预期输出：**
+```
+🚀 服务器启动成功！
+📍 地址: http://localhost:3000
+🏥 健康检查: http://localhost:3000/health
+📡 API 信息: http://localhost:3000/api/info
+```
+
+**验证接口：**
+
+在浏览器访问 http://localhost:3000/health，应该看到：
+```json
+{
+  "status": "ok",
+  "message": "服务器运行正常",
+  "timestamp": "2024-01-28T..."
+}
+```
+
+访问 http://localhost:3000/api/info，应该看到：
+```json
+{
+  "name": "协同编辑器后端服务",
+  "version": "1.0.0",
+  "description": "基于 Koa2 + TypeScript 的后端服务"
+}
+```
+
+### 8.4 启动前端服务
+
+打开新终端，运行：
+
+```bash
+pnpm dev:client
+```
+
+**预期输出：**
+```
+VITE v6.x.x  ready in xxx ms
+
+➜  Local:   http://localhost:5173/
+➜  Network: use --host to expose
+```
+
+**验证页面：**
+
+在浏览器访问 http://localhost:5173，应该看到：
+- 标题："企业级协同编辑器"
+- 副标题："项目脚手架搭建完成 ✓"
+- 两个卡片显示前后端技术栈
+
+### 8.5 验证热更新
+
+**前端热更新：**
+
+1. 修改 `client/src/App.tsx`，将标题改为其他文字
+2. 保存文件
+3. 浏览器应该自动刷新，显示新内容
+
+**后端热重启：**
+
+1. 修改 `server/src/index.ts`，修改健康检查的 message
+2. 保存文件
+3. 终端显示 "重启中..."
+4. 刷新浏览器，访问 `/health` 应该看到新的 message
+
+### 8.6 验证 Tailwind CSS
+
+在 `client/src/App.tsx` 中添加一个按钮：
+
+```tsx
+<button className="mt-4 rounded-lg bg-primary-500 px-6 py-2 text-white hover:bg-primary-600">
+  测试按钮
+</button>
+```
+
+保存后，浏览器应该显示一个蓝色按钮，鼠标悬停时颜色变深。
+
+### 8.7 验证 TypeScript
+
+在 `client/src/App.tsx` 中故意写错代码：
+
+```tsx
+const num: number = "hello"  // 应该报错
+```
+
+**预期结果：**
+- VS Code 显示红色波浪线
+- 鼠标悬停显示错误信息："Type 'string' is not assignable to type 'number'"
+
+### 8.8 验证代码格式化
+
+运行格式化命令：
+
+```bash
+pnpm format
+```
+
+**预期结果：**
+- 所有文件按照 Prettier 规则格式化
+- 输出显示格式化的文件列表
+
+### 8.9 检查项目结构
+
+运行以下命令查看项目结构：
+
+```bash
+tree -L 2 -I 'node_modules'
+```
+
+**预期结构：**
+```
+.
+├── client/
+│   ├── src/
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vite.config.ts
+├── server/
+│   ├── src/
+│   ├── package.json
+│   └── tsconfig.json
+├── docs/
+│   └── chapter-01.md
+├── scripts/
+│   └── check-env.js
+├── package.json
+├── pnpm-workspace.yaml
+└── README.md
+```
+
+### ✅ 验证通过标准
+
+如果以上所有验证都通过，说明 Chapter 1 实现正确！你可以继续学习 Chapter 2。
+
+如果有任何验证失败，请：
+1. 检查是否按照教程步骤操作
+2. 查看错误信息
+3. 对比 Git commit 中的代码
+4. 重新执行相关步骤
+
+---
+
+## 九、下一章预告
 
 在下一章（Chapter 2）中，我们将：
 
