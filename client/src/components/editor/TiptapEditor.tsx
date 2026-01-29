@@ -2,14 +2,17 @@
  * Tiptap 富文本编辑器组件
  */
 
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
+import Collaboration from '@tiptap/extension-collaboration'
+import * as Y from 'yjs'
 import BubbleMenu from './BubbleMenu'
 import MenuBar from './MenuBar'
 import EditorStatusBar from './EditorStatusBar'
+import { createYDoc, getYFragment } from '../../utils/yjs'
 import type { Document } from '../../types/document'
 
 interface TiptapEditorProps {
@@ -19,12 +22,26 @@ interface TiptapEditorProps {
 }
 
 function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEditorProps) {
+  // 为每个文档创建独立的 Y.Doc
+  const ydoc = useMemo(() => createYDoc(document.id.toString()), [document.id])
+  
+  // 创建 UndoManager
+  const undoManager = useMemo(() => {
+    const fragment = getYFragment(ydoc)
+    return new Y.UndoManager(fragment)
+  }, [ydoc])
+  
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
+        // @ts-ignore - history 配置在运行时是有效的
+        history: false, // 禁用内置的 History 扩展
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
         },
+      }),
+      Collaboration.configure({
+        fragment: getYFragment(ydoc),
       }),
       Placeholder.configure({
         placeholder: '开始输入内容...',
@@ -41,14 +58,50 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       const html = editor.getHTML()
       onUpdate(html)
     },
-  }, []) // 添加空依赖数组，确保只初始化一次
-
-  // 当文档切换时更新编辑器内容
+  }, [document.id]) // 当文档 ID 变化时重新创建编辑器
+  
+  // 添加自定义的 undo/redo 命令
   useEffect(() => {
-    if (editor && document.content !== editor.getHTML()) {
-      editor.commands.setContent(document.content)
+    if (!editor) return
+    
+    // 覆盖默认的 undo 命令
+    editor.commands.undo = () => {
+      undoManager.undo()
+      return true
     }
-  }, [document.id, document.content, editor])
+    
+    // 覆盖默认的 redo 命令
+    editor.commands.redo = () => {
+      undoManager.redo()
+      return true
+    }
+    
+    // 覆盖 can() 方法
+    const originalCan = editor.can.bind(editor)
+    editor.can = () => {
+      const canChain = originalCan()
+      return {
+        ...canChain,
+        undo: () => undoManager.canUndo(),
+        redo: () => undoManager.canRedo(),
+      }
+    }
+  }, [editor, undoManager])
+
+  // 当文档切换时，从服务器加载内容并同步到 Y.Doc
+  useEffect(() => {
+    if (!editor || !document.content) return
+
+    // 检查 Y.Doc 是否为空
+    const fragment = getYFragment(ydoc)
+    const isEmpty = fragment.length === 0
+
+    // 如果 Y.Doc 为空且服务器有内容，则加载服务器内容
+    if (isEmpty && document.content && document.content !== '<p></p>') {
+      editor.commands.setContent(document.content)
+      console.log('📄 从服务器加载文档内容')
+    }
+  }, [document.id, document.content, editor, ydoc])
 
   if (!editor) {
     return <div className="flex h-full items-center justify-center">加载编辑器...</div>

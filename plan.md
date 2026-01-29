@@ -9,8 +9,8 @@
 - 后端：Node.js + TypeScript + Koa2 + Hocuspocus + SQLite
 
 **总章节：** 20 章
-**已完成：** 10 章
-**进度：** 50%
+**已完成：** 11 章
+**进度：** 55%
 
 ---
 
@@ -347,24 +347,26 @@
 
 ### 阶段四：协同编辑核心（Chapter 11-14）
 
-#### ⏳ Chapter 11: Y.js 基础集成
-**状态：** 待开始  
-**Commit：** `feat: 集成 Y.js 实现基础协同`  
-**预计时间：** 3-4 小时
+#### ✅ Chapter 11: Y.js 基础集成
+**状态：** 已完成 ✓  
+**Commit：** `feat: 集成 Y.js 实现基础协同编辑`  
+**完成时间：** 2024-01-29
 
-**计划内容：**
-- [ ] 安装 Y.js 和相关依赖
-- [ ] 创建 Y.Doc 实例
-- [ ] 集成 Collaboration 扩展
-- [ ] 实现本地多窗口同步测试
-- [ ] 实现 Y.js 状态持久化
-- [ ] 编写 Chapter 11 教程文档
+**实现内容：**
+- [x] 安装 Y.js 和相关依赖
+- [x] 创建 Y.Doc 实例
+- [x] 集成 Collaboration 扩展
+- [x] 实现本地多窗口同步
+- [x] 实现 IndexedDB 持久化
+- [x] 集成 Y.js UndoManager
+- [x] 编写 Chapter 11 教程文档
 
 **核心知识点：**
 - CRDT 算法原理
 - Y.js 核心概念
 - Shared Types 介绍
-- 协同编辑原理
+- 本地数据持久化
+- UndoManager 使用
 
 **面试考点：**
 - CRDT vs OT 算法
