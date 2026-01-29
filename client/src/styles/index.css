@@ -248,3 +248,42 @@
     opacity: 0;
   }
 }
+
+/* 斜杠命令菜单样式 */
+.slash-commands-list {
+  @apply bg-white rounded-lg shadow-lg border border-gray-200 p-2 max-h-80 overflow-y-auto;
+  min-width: 280px;
+}
+
+.slash-commands-item {
+  @apply flex items-start gap-3 w-full px-3 py-2 rounded-md text-left transition-colors;
+}
+
+.slash-commands-item:hover,
+.slash-commands-item.is-selected {
+  @apply bg-blue-50;
+}
+
+.slash-commands-icon {
+  @apply flex-shrink-0 w-10 h-10 flex items-center justify-center bg-gray-100 rounded-md text-gray-700 font-semibold text-sm;
+}
+
+.slash-commands-item.is-selected .slash-commands-icon {
+  @apply bg-blue-100 text-blue-700;
+}
+
+.slash-commands-content {
+  @apply flex-1 min-w-0;
+}
+
+.slash-commands-title {
+  @apply text-sm font-medium text-gray-900;
+}
+
+.slash-commands-description {
+  @apply text-xs text-gray-500 mt-0.5;
+}
+
+.slash-commands-empty {
+  @apply px-3 py-2 text-sm text-gray-500;
+}

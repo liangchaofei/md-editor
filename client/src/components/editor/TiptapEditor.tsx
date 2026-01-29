@@ -9,6 +9,8 @@ import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import Collaboration from '@tiptap/extension-collaboration'
 import { CustomCollaborationCursor } from '../../extensions/CustomCollaborationCursor'
+import { CustomKeymap } from '../../extensions/CustomKeymap'
+import { SlashCommands, slashCommandSuggestion } from '../../extensions/SlashCommands'
 import BubbleMenu from './BubbleMenu'
 import MenuBar from './MenuBar'
 import EditorStatusBar from './EditorStatusBar'
@@ -62,8 +64,14 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
           color: '#000000',
         },
       }),
+      // 自定义快捷键
+      CustomKeymap,
+      // 斜杠命令
+      SlashCommands.configure({
+        suggestion: slashCommandSuggestion,
+      }),
       Placeholder.configure({
-        placeholder: '开始输入内容...',
+        placeholder: '开始输入内容... 输入 / 查看命令',
       }),
       CharacterCount,
     ],
