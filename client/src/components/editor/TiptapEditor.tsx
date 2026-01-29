@@ -8,9 +8,18 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import Collaboration from '@tiptap/extension-collaboration'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { Image } from '@tiptap/extension-image'
+import { TaskList } from '@tiptap/extension-task-list'
+import { TaskItem } from '@tiptap/extension-task-item'
+import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight'
 import { CustomCollaborationCursor } from '../../extensions/CustomCollaborationCursor'
 import { CustomKeymap } from '../../extensions/CustomKeymap'
 import { SlashCommands, slashCommandSuggestion } from '../../extensions/SlashCommands'
+import { lowlight } from '../../utils/lowlight'
 import BubbleMenu from './BubbleMenu'
 import MenuBar from './MenuBar'
 import EditorStatusBar from './EditorStatusBar'
@@ -19,6 +28,7 @@ import OfflineBanner from './OfflineBanner'
 import ReconnectingBanner from './ReconnectingBanner'
 import OnlineUsers from './OnlineUsers'
 import ExportMenu from './ExportMenu'
+import TableMenu from './TableMenu'
 import { createYDoc, createHocuspocusProvider } from '../../utils/yjs'
 import { useCollaborationStatus } from '../../hooks/useCollaborationStatus'
 import type { Document } from '../../types/document'
@@ -51,8 +61,10 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
   
   const editor = useEditor({
     extensions: [
-      // StarterKit 包含基础扩展（不包括 History，因为 Collaboration 自带）
-      StarterKit,
+      // StarterKit 包含基础扩展（禁用 CodeBlock，使用带高亮的版本）
+      StarterKit.configure({
+        codeBlock: false,
+      }),
       Collaboration.configure({
         // 使用 fragment
         fragment: ydoc.getXmlFragment('default'),
@@ -70,6 +82,27 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       // 斜杠命令
       SlashCommands.configure({
         suggestion: slashCommandSuggestion,
+      }),
+      // 表格
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      // 图片
+      Image.configure({
+        inline: true,
+        allowBase64: true,
+      }),
+      // 任务列表
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }),
+      // 代码高亮
+      CodeBlockLowlight.configure({
+        lowlight,
       }),
       Placeholder.configure({
         placeholder: '开始输入内容... 输入 / 查看命令',
@@ -153,6 +186,9 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
 
       {/* 固定工具栏 */}
       <MenuBar editor={editor} />
+
+      {/* 表格操作菜单 */}
+      <TableMenu editor={editor} />
 
       {/* 浮动工具栏 */}
       <BubbleMenu editor={editor} />

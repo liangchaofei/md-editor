@@ -108,6 +108,37 @@ export const slashCommandItems: CommandItem[] = [
     },
     aliases: ['hr', 'divider', '分隔线'],
   },
+  {
+    title: '表格',
+    description: '插入表格',
+    icon: '📊',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+    },
+    aliases: ['table', 'biaoge', '表'],
+  },
+  {
+    title: '图片',
+    description: '插入图片',
+    icon: '🖼️',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run()
+      const url = window.prompt('请输入图片 URL:')
+      if (url) {
+        editor.chain().focus().setImage({ src: url }).run()
+      }
+    },
+    aliases: ['image', 'tupian', '图'],
+  },
+  {
+    title: '任务列表',
+    description: '创建待办事项',
+    icon: '☑️',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).toggleTaskList().run()
+    },
+    aliases: ['task', 'todo', 'checkbox', '待办', '任务'],
+  },
 ]
 
 // Suggestion 配置
