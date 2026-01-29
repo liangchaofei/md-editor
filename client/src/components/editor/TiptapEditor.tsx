@@ -5,6 +5,8 @@
 import { useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import BubbleMenu from './BubbleMenu'
+import MenuBar from './MenuBar'
 import type { Document } from '../../types/document'
 
 interface TiptapEditorProps {
@@ -55,12 +57,14 @@ function TiptapEditor({ document, onUpdate }: TiptapEditorProps) {
           <span>
             最后更新: {new Date(document.updated_at).toLocaleString('zh-CN')}
           </span>
-          <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-green-500"></span>
-            已保存
-          </span>
         </div>
       </div>
+
+      {/* 固定工具栏 */}
+      <MenuBar editor={editor} />
+
+      {/* 浮动工具栏 */}
+      <BubbleMenu editor={editor} />
 
       {/* 编辑器内容 */}
       <div className="flex-1 overflow-auto">

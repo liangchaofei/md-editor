@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tippy.js 样式 */
+@import 'tippy.js/dist/tippy.css';
+
 /* 全局样式 */
 @layer base {
   * {

@@ -9,8 +9,8 @@
 - 后端：Node.js + TypeScript + Koa2 + Hocuspocus + SQLite
 
 **总章节：** 20 章
-**已完成：** 2 章
-**进度：** 10%
+**已完成：** 9 章
+**进度：** 45%
 
 ---
 
