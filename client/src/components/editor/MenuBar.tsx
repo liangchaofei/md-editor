@@ -2,6 +2,7 @@
  * 固定工具栏（编辑器顶部）
  */
 
+import { useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 
 interface MenuBarProps {
@@ -9,6 +10,25 @@ interface MenuBarProps {
 }
 
 function MenuBar({ editor }: MenuBarProps) {
+  // 强制组件在编辑器状态变化时重新渲染
+  const [, forceUpdate] = useState({})
+
+  useEffect(() => {
+    if (!editor) return
+
+    const updateHandler = () => {
+      forceUpdate({})
+    }
+
+    editor.on('selectionUpdate', updateHandler)
+    editor.on('transaction', updateHandler)
+
+    return () => {
+      editor.off('selectionUpdate', updateHandler)
+      editor.off('transaction', updateHandler)
+    }
+  }, [editor])
+
   if (!editor) {
     return null
   }

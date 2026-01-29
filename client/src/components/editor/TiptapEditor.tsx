@@ -21,19 +21,40 @@ function TiptapEditor({ document, onUpdate }: TiptapEditorProps) {
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
         },
+        // 确保这些扩展都启用
+        bulletList: {
+          HTMLAttributes: {
+            class: 'list-disc',
+          },
+        },
+        orderedList: {
+          HTMLAttributes: {
+            class: 'list-decimal',
+          },
+        },
+        codeBlock: {
+          HTMLAttributes: {
+            class: 'code-block',
+          },
+        },
+        blockquote: {
+          HTMLAttributes: {
+            class: 'blockquote',
+          },
+        },
       }),
     ],
-    content: document.content,
+    content: document.content || '<p></p>', // 确保至少有一个段落
     editorProps: {
       attributes: {
-        class: 'prose prose-lg max-w-none focus:outline-none min-h-[500px] px-8 py-6',
+        class: 'focus:outline-none min-h-[500px] px-8 py-6',
       },
     },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML()
       onUpdate(html)
     },
-  })
+  }, []) // 添加空依赖数组，确保只初始化一次
 
   // 当文档切换时更新编辑器内容
   useEffect(() => {
@@ -43,7 +64,7 @@ function TiptapEditor({ document, onUpdate }: TiptapEditorProps) {
   }, [document.id, document.content, editor])
 
   if (!editor) {
-    return null
+    return <div className="flex h-full items-center justify-center">加载编辑器...</div>
   }
 
   return (
