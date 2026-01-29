@@ -112,7 +112,28 @@ export default BubbleMenu
 
 ### 2.3 关键配置说明
 
-**1. tippyOptions 配置**
+**1. 使用 onMouseDown 而不是 onClick**
+
+这是一个非常重要的细节！工具栏按钮必须使用 `onMouseDown` 事件：
+
+```typescript
+<button
+  onMouseDown={(e) => {
+    e.preventDefault()  // 阻止默认行为，防止焦点转移
+    editor.chain().focus().toggleBold().run()
+  }}
+>
+  加粗
+</button>
+```
+
+**为什么不能用 onClick？**
+- 当用户点击按钮时，焦点会从编辑器转移到按钮
+- 此时 `editor.isFocused` 变为 `false`
+- 编辑器命令无法正确执行
+- 使用 `onMouseDown` + `e.preventDefault()` 可以防止焦点转移
+
+**2. tippyOptions 配置**
 ```typescript
 tippyOptions={{ 
   duration: 100,      // 动画时长（毫秒）
@@ -121,7 +142,7 @@ tippyOptions={{
 }}
 ```
 
-**2. shouldShow 函数**
+**3. shouldShow 函数**
 ```typescript
 shouldShow={({ editor, state }) => {
   const { from, to } = state.selection
@@ -133,10 +154,23 @@ shouldShow={({ editor, state }) => {
 - `from !== to` 表示有文本被选中
 - 可以添加更多条件（如不在代码块中显示）
 
-**3. 样式类名**
+**4. 样式类名**
 - `z-50`: 确保浮动菜单在最上层
 - `shadow-xl`: 添加阴影效果
 - `border border-gray-200`: 边框样式
+
+**5. 按钮事件处理**
+所有按钮都必须使用 `onMouseDown` 而不是 `onClick`：
+```typescript
+<button
+  onMouseDown={(e) => {
+    e.preventDefault()
+    editor.chain().focus().toggleBold().run()
+  }}
+>
+  加粗
+</button>
+```
 
 ### 2.4 导入 Tippy.js 样式
 
@@ -160,21 +194,28 @@ shouldShow={({ editor, state }) => {
 
 ---
 
-## 二、实现浮动工具栏
-
----
-
 ## 三、实现固定工具栏
+
+### 3.1 创建 MenuBar 组件
 
 创建 `client/src/components/editor/MenuBar.tsx`：
 
 ```typescript
+import type { Editor } from '@tiptap/react'
+
 function MenuBar({ editor }: { editor: Editor }) {
+  if (!editor) {
+    return null
+  }
+
   return (
     <div className="flex items-center gap-1 border-b bg-gray-50 p-2">
       {/* 撤销/重做 */}
       <button
-        onClick={() => editor.chain().focus().undo().run()}
+        onMouseDown={(e) => {
+          e.preventDefault()
+          editor.chain().focus().undo().run()
+        }}
         disabled={!editor.can().undo()}
       >
         撤销
@@ -182,7 +223,10 @@ function MenuBar({ editor }: { editor: Editor }) {
       
       {/* 格式化按钮 */}
       <button
-        onClick={() => editor.chain().focus().toggleBold().run()}
+        onMouseDown={(e) => {
+          e.preventDefault()
+          editor.chain().focus().toggleBold().run()
+        }}
         className={editor.isActive('bold') ? 'active' : ''}
       >
         加粗
@@ -192,7 +236,10 @@ function MenuBar({ editor }: { editor: Editor }) {
       {[1, 2, 3].map((level) => (
         <button
           key={level}
-          onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().toggleHeading({ level }).run()
+          }}
           className={editor.isActive('heading', { level }) ? 'active' : ''}
         >
           H{level}
@@ -203,12 +250,101 @@ function MenuBar({ editor }: { editor: Editor }) {
 }
 ```
 
-**功能分组：**
+### 3.2 关键要点
+
+**1. 必须使用 onMouseDown**
+```typescript
+// ❌ 错误：使用 onClick 会导致焦点丢失
+<button onClick={() => editor.chain().focus().toggleBold().run()}>
+
+// ✅ 正确：使用 onMouseDown + preventDefault
+<button onMouseDown={(e) => {
+  e.preventDefault()
+  editor.chain().focus().toggleBold().run()
+}}>
+```
+
+**原因：**
+- 点击按钮时，焦点会从编辑器转移到按钮
+- 导致 `editor.isFocused` 变为 `false`
+- 编辑器命令无法正确执行
+- `onMouseDown` 在焦点转移前触发
+- `e.preventDefault()` 阻止焦点转移
+
+**2. 功能分组**
 1. 撤销/重做
 2. 文本格式（加粗、斜体、删除线、代码）
 3. 标题（H1-H6）
 4. 列表（无序、有序）
 5. 其他（引用、代码块、分隔线）
+
+---
+
+## 四、工具栏按钮最佳实践
+
+### 4.1 事件处理
+
+**使用 onMouseDown 而不是 onClick：**
+
+```typescript
+// ❌ 错误示例
+<button onClick={() => editor.chain().focus().toggleBold().run()}>
+  加粗
+</button>
+
+// ✅ 正确示例
+<button
+  onMouseDown={(e) => {
+    e.preventDefault()  // 必须阻止默认行为
+    editor.chain().focus().toggleBold().run()
+  }}
+>
+  加粗
+</button>
+```
+
+**为什么这样做？**
+1. **焦点问题：** 点击按钮会导致编辑器失去焦点
+2. **命令失效：** 编辑器失去焦点后，某些命令无法执行
+3. **用户体验：** 用户点击按钮后需要重新点击编辑器才能继续输入
+
+**技术原理：**
+- `onMouseDown` 在 `onClick` 之前触发
+- `onMouseDown` 在焦点转移之前触发
+- `e.preventDefault()` 阻止默认的焦点转移行为
+- `editor.chain().focus()` 确保编辑器保持焦点
+
+### 4.2 按钮状态同步
+
+```typescript
+<button
+  className={editor.isActive('bold') ? 'active' : ''}
+>
+  加粗
+</button>
+```
+
+- 使用 `editor.isActive()` 检查当前状态
+- 根据状态添加不同的样式类
+- 提供视觉反馈给用户
+
+### 4.3 禁用状态
+
+```typescript
+<button
+  onMouseDown={(e) => {
+    e.preventDefault()
+    editor.chain().focus().undo().run()
+  }}
+  disabled={!editor.can().undo()}
+>
+  撤销
+</button>
+```
+
+- 使用 `editor.can()` 检查命令是否可执行
+- 不可执行时禁用按钮
+- 提升用户体验
 
 ---
 
