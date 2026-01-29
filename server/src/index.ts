@@ -7,6 +7,7 @@ import { errorHandler } from './middleware/errorHandler.js'
 import { logger } from './middleware/logger.js'
 import { success } from './utils/response.js'
 import documentsRouter from './routes/documents.js'
+import { startHocuspocusServer } from './hocuspocus.js'
 
 const app = new Koa()
 const router = new Router()
@@ -57,17 +58,21 @@ app.on('error', err => {
 const PORT = process.env.PORT || 3000
 
 // 启动服务器
-function startServer() {
+async function startServer() {
   try {
     // 初始化数据库
     initDatabase()
+
+    // 启动 Hocuspocus WebSocket 服务器
+    await startHocuspocusServer()
 
     // 启动 HTTP 服务器
     app.listen(PORT, () => {
       console.log('\n' + '='.repeat(50))
       console.log('🚀 服务器启动成功！')
       console.log('='.repeat(50))
-      console.log(`📍 地址: http://localhost:${PORT}`)
+      console.log(`📍 HTTP 服务: http://localhost:${PORT}`)
+      console.log(`🔌 WebSocket 服务: ws://localhost:1234`)
       console.log(`🏥 健康检查: http://localhost:${PORT}/health`)
       console.log(`📡 API 信息: http://localhost:${PORT}/api/info`)
       console.log(`🗄️  数据库测试: http://localhost:${PORT}/api/db-test`)

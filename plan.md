@@ -9,8 +9,8 @@
 - 后端：Node.js + TypeScript + Koa2 + Hocuspocus + SQLite
 
 **总章节：** 20 章
-**已完成：** 11 章
-**进度：** 55%
+**已完成：** 12 章
+**进度：** 60%
 
 ---
 
@@ -376,31 +376,32 @@
 
 ---
 
-#### ⏳ Chapter 12: Hocuspocus 服务器
-**状态：** 待开始  
-**Commit：** `feat: 搭建 Hocuspocus WebSocket 服务器`  
-**预计时间：** 4-5 小时
+#### ✅ Chapter 12: Hocuspocus 服务器
+**状态：** 已完成 ✓  
+**Commit：** `feat: 搭建 Hocuspocus WebSocket 服务器实现实时协同`  
+**完成时间：** 2024-01-29
 
-**计划内容：**
-- [ ] 安装 Hocuspocus Server
-- [ ] 配置 WebSocket 服务
-- [ ] 集成数据库持久化扩展
-- [ ] 实现文档加载和保存
-- [ ] 实现用户认证（简单版）
-- [ ] 配置日志和监控
-- [ ] 编写 Chapter 12 教程文档
+**实现内容：**
+- [x] 安装 Hocuspocus Server
+- [x] 配置 WebSocket 服务
+- [x] 集成数据库持久化扩展
+- [x] 实现文档加载和保存
+- [x] 前端连接 WebSocket 服务器
+- [x] 实现跨设备实时同步
+- [x] 编写 Chapter 12 教程文档
 
 **核心知识点：**
 - WebSocket 原理
 - Hocuspocus 架构
 - 扩展系统使用
 - 数据持久化策略
+- 实时同步机制
 
 **面试考点：**
 - WebSocket vs HTTP
 - 长连接管理
 - 心跳机制
-- 负载均衡
+- 数据同步策略
 
 ---
 

@@ -10,11 +10,14 @@
     "lint": "eslint . --ext ts"
   },
   "dependencies": {
+    "@hocuspocus/extension-database": "^3.4.4",
+    "@hocuspocus/server": "^3.4.4",
     "@koa/bodyparser": "^6.1.0",
     "@koa/cors": "^5.0.0",
     "@koa/router": "^13.1.0",
     "better-sqlite3": "^11.8.1",
-    "koa": "^2.16.3"
+    "koa": "^2.16.3",
+    "y-websocket": "^3.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",

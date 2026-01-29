@@ -8,11 +8,10 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import Collaboration from '@tiptap/extension-collaboration'
-import * as Y from 'yjs'
 import BubbleMenu from './BubbleMenu'
 import MenuBar from './MenuBar'
 import EditorStatusBar from './EditorStatusBar'
-import { createYDoc, getYFragment } from '../../utils/yjs'
+import { createYDoc, createHocuspocusProvider, getYFragment } from '../../utils/yjs'
 import type { Document } from '../../types/document'
 
 interface TiptapEditorProps {
@@ -22,33 +21,38 @@ interface TiptapEditorProps {
 }
 
 function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEditorProps) {
-  // 为每个文档创建独立的 Y.Doc
-  const ydoc = useMemo(() => createYDoc(document.id.toString()), [document.id])
+  // 为每个文档创建独立的 Y.Doc 和 Provider
+  const { ydoc, provider } = useMemo(() => {
+    const doc = createYDoc(document.id.toString())
+    const prov = createHocuspocusProvider(document.id.toString(), doc)
+    return { ydoc: doc, provider: prov }
+  }, [document.id])
   
-  // 创建 UndoManager
-  const undoManager = useMemo(() => {
-    const fragment = getYFragment(ydoc)
-    return new Y.UndoManager(fragment)
-  }, [ydoc])
+  // 清理 provider
+  useEffect(() => {
+    return () => {
+      provider.destroy()
+    }
+  }, [provider])
   
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // @ts-ignore - history 配置在运行时是有效的
-        history: false, // 禁用内置的 History 扩展
-        heading: {
-          levels: [1, 2, 3, 4, 5, 6],
-        },
+        // 禁用 History 扩展，因为 Collaboration 自带历史记录
+        history: false,
       }),
       Collaboration.configure({
-        fragment: getYFragment(ydoc),
+        // 传入整个 Y.Doc，让 Collaboration 扩展自己管理 fragment
+        document: ydoc,
+        // 使用默认的 field 名称
+        field: 'default',
       }),
       Placeholder.configure({
         placeholder: '开始输入内容...',
       }),
       CharacterCount,
     ],
-    content: document.content || '<p></p>', // 确保至少有一个段落
+    // 使用 Collaboration 时不设置初始内容，让 Y.js 管理
     editorProps: {
       attributes: {
         class: 'focus:outline-none min-h-[500px] px-8 py-6',
@@ -58,50 +62,31 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       const html = editor.getHTML()
       onUpdate(html)
     },
-  }, [document.id]) // 当文档 ID 变化时重新创建编辑器
+  }, [document.id, ydoc]) // 当文档 ID 或 ydoc 变化时重新创建编辑器
   
-  // 添加自定义的 undo/redo 命令
+  // 监听 provider 同步完成后，如果内容为空则从服务器加载
   useEffect(() => {
-    if (!editor) return
-    
-    // 覆盖默认的 undo 命令
-    editor.commands.undo = () => {
-      undoManager.undo()
-      return true
-    }
-    
-    // 覆盖默认的 redo 命令
-    editor.commands.redo = () => {
-      undoManager.redo()
-      return true
-    }
-    
-    // 覆盖 can() 方法
-    const originalCan = editor.can.bind(editor)
-    editor.can = () => {
-      const canChain = originalCan()
-      return {
-        ...canChain,
-        undo: () => undoManager.canUndo(),
-        redo: () => undoManager.canRedo(),
+    if (!editor || !provider) return
+
+    const handleSynced = ({ state }: { state: boolean }) => {
+      if (!state) return
+
+      // 同步完成后，检查内容是否为空
+      const currentContent = editor.getHTML()
+      const isEmpty = currentContent === '<p></p>' || currentContent === ''
+
+      // 如果内容为空且服务器有内容，则加载服务器内容
+      if (isEmpty && document.content && document.content !== '<p></p>') {
+        editor.commands.setContent(document.content)
       }
     }
-  }, [editor, undoManager])
 
-  // 当文档切换时，从服务器加载内容并同步到 Y.Doc
-  useEffect(() => {
-    if (!editor || !document.content) return
+    provider.on('synced', handleSynced)
 
-    // 检查 Y.Doc 是否为空
-    const fragment = getYFragment(ydoc)
-    const isEmpty = fragment.length === 0
-
-    // 如果 Y.Doc 为空且服务器有内容，则加载服务器内容
-    if (isEmpty && document.content && document.content !== '<p></p>') {
-      editor.commands.setContent(document.content)
-      console.log('📄 从服务器加载文档内容')
+    return () => {
+      provider.off('synced', handleSynced)
     }
-  }, [document.id, document.content, editor, ydoc])
+  }, [editor, provider, document.content])
 
   if (!editor) {
     return <div className="flex h-full items-center justify-center">加载编辑器...</div>
