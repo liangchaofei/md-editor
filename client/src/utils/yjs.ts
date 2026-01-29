@@ -5,6 +5,7 @@
 import * as Y from 'yjs'
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { HocuspocusProvider } from '@hocuspocus/provider'
+import { getUserColor, getUserName } from './colors'
 
 /**
  * 创建 Y.Doc 实例
@@ -26,6 +27,10 @@ export function createYDoc(documentId: string): Y.Doc {
  * 创建 Hocuspocus Provider
  */
 export function createHocuspocusProvider(documentId: string, ydoc: Y.Doc): HocuspocusProvider {
+  // 生成用户信息
+  const userName = getUserName()
+  const userColor = getUserColor(userName)
+  
   const provider = new HocuspocusProvider({
     url: 'ws://localhost:1234',
     name: documentId,
@@ -55,6 +60,14 @@ export function createHocuspocusProvider(documentId: string, ydoc: Y.Doc): Hocus
       console.log('🔄 同步状态:', state ? '已同步' : '未同步')
     },
   })
+  
+  // 设置用户信息到 Awareness
+  provider.setAwarenessField('user', {
+    name: userName,
+    color: userColor,
+  })
+  
+  console.log(`👤 当前用户: ${userName} (${userColor})`)
   
   return provider
 }

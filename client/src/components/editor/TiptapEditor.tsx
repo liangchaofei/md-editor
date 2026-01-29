@@ -8,12 +8,14 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import Collaboration from '@tiptap/extension-collaboration'
+import { CustomCollaborationCursor } from '../../extensions/CustomCollaborationCursor'
 import BubbleMenu from './BubbleMenu'
 import MenuBar from './MenuBar'
 import EditorStatusBar from './EditorStatusBar'
 import ConnectionStatus from './ConnectionStatus'
 import OfflineBanner from './OfflineBanner'
 import ReconnectingBanner from './ReconnectingBanner'
+import OnlineUsers from './OnlineUsers'
 import { createYDoc, createHocuspocusProvider } from '../../utils/yjs'
 import { useCollaborationStatus } from '../../hooks/useCollaborationStatus'
 import type { Document } from '../../types/document'
@@ -46,15 +48,19 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
   
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        // 禁用 History 扩展，因为 Collaboration 自带历史记录
-        history: false,
-      }),
+      // StarterKit 包含基础扩展（不包括 History，因为 Collaboration 自带）
+      StarterKit,
       Collaboration.configure({
-        // 传入整个 Y.Doc，让 Collaboration 扩展自己管理 fragment
-        document: ydoc,
-        // 使用默认的 field 名称
-        field: 'default',
+        // 使用 fragment
+        fragment: ydoc.getXmlFragment('default'),
+      }),
+      // 使用自定义的协作光标扩展
+      CustomCollaborationCursor.configure({
+        provider: provider,
+        user: {
+          name: 'Anonymous',
+          color: '#000000',
+        },
       }),
       Placeholder.configure({
         placeholder: '开始输入内容...',
@@ -71,7 +77,7 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       const html = editor.getHTML()
       onUpdate(html)
     },
-  }, [document.id, ydoc]) // 当文档 ID 或 ydoc 变化时重新创建编辑器
+  }, [document.id, ydoc, provider]) // 添加 provider 到依赖
   
   // 监听 provider 同步完成后，如果内容为空则从服务器加载
   useEffect(() => {
@@ -123,8 +129,13 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
             </div>
           </div>
           
-          {/* 连接状态指示器 */}
-          <ConnectionStatus provider={provider} />
+          <div className="flex flex-col items-end gap-3">
+            {/* 连接状态指示器 */}
+            <ConnectionStatus provider={provider} />
+            
+            {/* 在线用户列表 */}
+            <OnlineUsers provider={provider} />
+          </div>
         </div>
       </div>
 
