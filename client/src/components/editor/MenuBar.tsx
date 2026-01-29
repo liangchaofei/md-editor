@@ -200,6 +200,7 @@ function MenuBar({ editor }: MenuBarProps) {
         <button
           onMouseDown={(e) => {
             e.preventDefault()
+            // 如果当前已经是引用，则取消引用；否则转换为引用
             editor.chain().focus().toggleBlockquote().run()
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
@@ -214,7 +215,14 @@ function MenuBar({ editor }: MenuBarProps) {
         <button
           onMouseDown={(e) => {
             e.preventDefault()
-            editor.chain().focus().toggleCodeBlock().run()
+            // Insert 模式：插入新的代码块
+            if (editor.isActive('codeBlock')) {
+              // 如果已经在代码块中，退出代码块
+              editor.chain().focus().toggleCodeBlock().run()
+            } else {
+              // 插入新的代码块
+              editor.chain().focus().insertContent('<pre><code></code></pre>').run()
+            }
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
             editor.isActive('codeBlock') ? 'bg-gray-200 text-primary-600' : ''
@@ -228,6 +236,7 @@ function MenuBar({ editor }: MenuBarProps) {
         <button
           onMouseDown={(e) => {
             e.preventDefault()
+            // Insert 模式：插入分隔线
             editor.chain().focus().setHorizontalRule().run()
           }}
           className="rounded p-2 hover:bg-gray-200"

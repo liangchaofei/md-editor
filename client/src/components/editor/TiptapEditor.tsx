@@ -21,27 +21,6 @@ function TiptapEditor({ document, onUpdate }: TiptapEditorProps) {
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
         },
-        // 确保这些扩展都启用
-        bulletList: {
-          HTMLAttributes: {
-            class: 'list-disc',
-          },
-        },
-        orderedList: {
-          HTMLAttributes: {
-            class: 'list-decimal',
-          },
-        },
-        codeBlock: {
-          HTMLAttributes: {
-            class: 'code-block',
-          },
-        },
-        blockquote: {
-          HTMLAttributes: {
-            class: 'blockquote',
-          },
-        },
       }),
     ],
     content: document.content || '<p></p>', // 确保至少有一个段落
