@@ -524,15 +524,98 @@ Tiptap StarterKit 内置快捷键：
 
 ### 7.2 按钮状态不同步
 
-**问题：** 点击按钮后，按钮状态没有更新
+**问题：** 点击按钮后，按钮状态没有更新（如点击 H1 后按钮不高亮）
+
+**原因：** Tiptap 编辑器状态变化不会自动触发 React 组件重新渲染
 
 **解决方案：**
 ```typescript
-// 确保使用 editor.isActive() 检查状态
-className={editor.isActive('bold') ? 'active' : ''}
+import { useEffect, useState } from 'react'
+
+function MenuBar({ editor }: { editor: Editor }) {
+  // 强制组件在编辑器状态变化时重新渲染
+  const [, forceUpdate] = useState({})
+
+  useEffect(() => {
+    if (!editor) return
+
+    const updateHandler = () => {
+      forceUpdate({})
+    }
+
+    // 监听编辑器事件
+    editor.on('selectionUpdate', updateHandler)
+    editor.on('transaction', updateHandler)
+
+    return () => {
+      editor.off('selectionUpdate', updateHandler)
+      editor.off('transaction', updateHandler)
+    }
+  }, [editor])
+
+  // ... 按钮代码
+}
 ```
 
-### 7.3 快捷键不工作
+**关键点：**
+- 监听 `selectionUpdate` 事件（光标移动、选区变化）
+- 监听 `transaction` 事件（内容变化）
+- 使用 `forceUpdate({})` 强制组件重新渲染
+- 在 cleanup 函数中移除事件监听
+
+### 7.3 格式化功能不生效（标题、代码块等）
+
+**问题：** 点击标题、代码块按钮后，编辑器内容没有视觉变化
+
+**原因：** CSS 样式优先级问题
+
+**问题分析：**
+1. 使用 Tailwind 的 `@layer components` 时，样式优先级较低
+2. 使用 `@apply` 指令可能导致样式被覆盖
+3. `prose` 类的样式可能与自定义样式冲突
+
+**解决方案 1：移除 prose 类**
+```typescript
+// ❌ 错误：使用 prose 类
+editorProps: {
+  attributes: {
+    class: 'prose prose-lg max-w-none focus:outline-none ...',
+  },
+}
+
+// ✅ 正确：不使用 prose 类
+editorProps: {
+  attributes: {
+    class: 'focus:outline-none min-h-[500px] px-8 py-6',
+  },
+}
+```
+
+**解决方案 2：使用原生 CSS 而不是 @layer**
+```css
+/* ❌ 错误：使用 @layer 和 @apply */
+@layer components {
+  .ProseMirror h1 {
+    @apply text-4xl font-bold mt-8 mb-4;
+  }
+}
+
+/* ✅ 正确：直接使用原生 CSS */
+.ProseMirror h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+```
+
+**为什么这样做？**
+- Tailwind 的 `@layer` 系统有三个层级：base < components < utilities
+- `@layer components` 的优先级较低，容易被覆盖
+- 原生 CSS 不受 Tailwind 层级系统限制，优先级更高
+- 避免使用 `@apply` 可以减少编译问题
+
+### 7.4 快捷键不工作
 
 **问题：** 按 Ctrl+B 等快捷键没有反应
 
@@ -541,6 +624,13 @@ className={editor.isActive('bold') ? 'active' : ''}
 - 检查是否有其他组件拦截了键盘事件
 - 确保编辑器已聚焦
 
+**检查点：**
+- 命令执行结果是 `true` 还是 `false`？
+- 状态是否正确更新？
+- 浏览器控制台有没有错误？
+- 审查元素查看实际的 HTML 结构
+- 检查 CSS 样式是否被应用
+
 ---
 
 ## 八、本章小结
@@ -548,8 +638,8 @@ className={editor.isActive('bold') ? 'active' : ''}
 通过本章学习，我们完成了：
 
 ### 功能实现
-- ✅ 浮动工具栏
-- ✅ 固定工具栏
+- ✅ 浮动工具栏（BubbleMenu）
+- ✅ 固定工具栏（MenuBar）
 - ✅ 完整的格式化功能
 - ✅ 撤销/重做
 - ✅ 快捷键支持
@@ -559,6 +649,26 @@ className={editor.isActive('bold') ? 'active' : ''}
 - ✅ 工具栏实现模式
 - ✅ 按钮状态管理
 - ✅ 用户体验优化
+
+### 关键技术点
+
+**1. 事件处理**
+- 使用 `onMouseDown` 而不是 `onClick`
+- 使用 `e.preventDefault()` 防止焦点丢失
+
+**2. 状态同步**
+- 监听 `selectionUpdate` 和 `transaction` 事件
+- 强制组件重新渲染以更新按钮状态
+
+**3. CSS 样式**
+- 避免使用 Tailwind 的 `@layer components`
+- 使用原生 CSS 确保样式优先级
+- 移除 `prose` 类避免样式冲突
+
+**4. 调试方法**
+- 添加 console.log 查看命令执行结果
+- 使用浏览器审查元素检查 HTML 结构
+- 检查 CSS 样式是否被正确应用
 
 现在编辑器已经具备完整的基础编辑功能！
 
