@@ -10,17 +10,18 @@
     "lint": "eslint . --ext ts"
   },
   "dependencies": {
-    "koa": "^2.16.3",
-    "@koa/router": "^13.1.0",
+    "@koa/bodyparser": "^6.1.0",
     "@koa/cors": "^5.0.0",
-    "better-sqlite3": "^11.8.1"
+    "@koa/router": "^13.1.0",
+    "better-sqlite3": "^11.8.1",
+    "koa": "^2.16.3"
   },
   "devDependencies": {
-    "@types/koa": "^2.15.0",
-    "@types/koa__router": "^12.0.4",
-    "@types/koa__cors": "^5.0.0",
-    "@types/node": "^22.10.2",
     "@types/better-sqlite3": "^7.6.12",
+    "@types/koa": "^2.15.0",
+    "@types/koa__cors": "^5.0.0",
+    "@types/koa__router": "^12.0.4",
+    "@types/node": "^22.10.2",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
     "eslint": "^9.15.0",

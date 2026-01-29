@@ -1,10 +1,12 @@
 import Koa from 'koa'
 import cors from '@koa/cors'
+import bodyParser from '@koa/bodyparser'
 import Router from '@koa/router'
 import { initDatabase, closeDatabase, getDatabase } from './database/index.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { logger } from './middleware/logger.js'
 import { success } from './utils/response.js'
+import documentsRouter from './routes/documents.js'
 
 const app = new Koa()
 const router = new Router()
@@ -13,6 +15,7 @@ const router = new Router()
 app.use(errorHandler) // 错误处理（最外层）
 app.use(logger) // 日志记录
 app.use(cors()) // 跨域处理
+app.use(bodyParser()) // 请求体解析
 
 // 健康检查接口
 router.get('/health', ctx => {
@@ -40,7 +43,10 @@ router.get('/api/db-test', ctx => {
   success(ctx, result, '数据库连接正常')
 })
 
-// 注册路由
+// 注册业务路由
+app.use(documentsRouter.routes()).use(documentsRouter.allowedMethods())
+
+// 注册基础路由
 app.use(router.routes()).use(router.allowedMethods())
 
 // 错误事件监听

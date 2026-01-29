@@ -21,16 +21,34 @@ export interface PaginatedResponse<T> {
   pageSize: number
 }
 
+// 分页信息
+export interface Pagination {
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
 // 文档类型
 export interface Document {
   id: number
   title: string
   content: string
-  yjs_state: Buffer | null
-  metadata: string
-  is_deleted: number
+  content_preview?: string
+  yjs_state?: Buffer | null
+  metadata: string | Record<string, any>
+  is_deleted?: number
   created_at: string
   updated_at: string
+}
+
+// 文档列表查询参数
+export interface DocumentListQuery {
+  page?: string
+  pageSize?: string
+  keyword?: string
+  sortBy?: string
+  sortOrder?: 'ASC' | 'DESC'
 }
 
 // 创建文档 DTO
