@@ -3,13 +3,18 @@
  */
 
 import type { Editor } from '@tiptap/react'
+import type { HocuspocusProvider } from '@hocuspocus/provider'
+import { useCollaborationStatus } from '../../hooks/useCollaborationStatus'
 
 interface EditorStatusBarProps {
   editor: Editor
   saveStatus: 'saved' | 'saving' | 'unsaved'
+  provider?: HocuspocusProvider | null
 }
 
-function EditorStatusBar({ editor, saveStatus }: EditorStatusBarProps) {
+function EditorStatusBar({ editor, saveStatus, provider }: EditorStatusBarProps) {
+  const { synced } = useCollaborationStatus(provider || null)
+  
   // 计算字数
   const wordCount = editor.storage.characterCount?.words() || 0
   const charCount = editor.storage.characterCount?.characters() || 0
@@ -35,8 +40,43 @@ function EditorStatusBar({ editor, saveStatus }: EditorStatusBarProps) {
         </span>
       </div>
 
-      {/* 右侧：保存状态 */}
-      <div className="flex items-center gap-2">
+      {/* 右侧：同步状态和保存状态 */}
+      <div className="flex items-center gap-4">
+        {/* 同步状态 */}
+        {provider && (
+          <div className={`flex items-center gap-1 ${synced ? 'text-green-600' : 'text-yellow-600'}`}>
+            {!synced && (
+              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            )}
+            {synced && (
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            )}
+            <span>{synced ? '已同步' : '同步中...'}</span>
+          </div>
+        )}
+        
+        {/* 保存状态 */}
         <div className={`flex items-center gap-1 ${saveColor}`}>
           {saveStatus === 'saving' && (
             <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">

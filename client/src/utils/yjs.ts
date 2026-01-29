@@ -31,12 +31,20 @@ export function createHocuspocusProvider(documentId: string, ydoc: Y.Doc): Hocus
     name: documentId,
     document: ydoc,
     
+    // 重连配置
+    maxAttempts: 0, // 无限重连
+    delay: 1000, // 初始延迟 1 秒
+    factor: 2, // 指数退避因子
+    maxDelay: 30000, // 最大延迟 30 秒
+    minDelay: 1000, // 最小延迟 1 秒
+    jitter: true, // 添加随机抖动
+    
     onConnect: () => {
       console.log('🔌 已连接到 Hocuspocus 服务器')
     },
     
     onDisconnect: ({ event }) => {
-      console.log('🔌 已断开与 Hocuspocus 服务器的连接', event)
+      console.log('🔌 已断开连接', event)
     },
     
     onStatus: ({ status }) => {

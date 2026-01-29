@@ -11,7 +11,11 @@ import Collaboration from '@tiptap/extension-collaboration'
 import BubbleMenu from './BubbleMenu'
 import MenuBar from './MenuBar'
 import EditorStatusBar from './EditorStatusBar'
-import { createYDoc, createHocuspocusProvider, getYFragment } from '../../utils/yjs'
+import ConnectionStatus from './ConnectionStatus'
+import OfflineBanner from './OfflineBanner'
+import ReconnectingBanner from './ReconnectingBanner'
+import { createYDoc, createHocuspocusProvider } from '../../utils/yjs'
+import { useCollaborationStatus } from '../../hooks/useCollaborationStatus'
 import type { Document } from '../../types/document'
 
 interface TiptapEditorProps {
@@ -27,6 +31,11 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
     const prov = createHocuspocusProvider(document.id.toString(), doc)
     return { ydoc: doc, provider: prov }
   }, [document.id])
+  
+  // 获取协同状态
+  const { status } = useCollaborationStatus(provider)
+  const isOffline = status === 'disconnected'
+  const isReconnecting = status === 'connecting' && provider !== null
   
   // 清理 provider
   useEffect(() => {
@@ -94,15 +103,28 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
 
   return (
     <div className="flex h-full flex-col bg-white">
-      {/* 文档标题 */}
+      {/* 重连提示 */}
+      <ReconnectingBanner isReconnecting={isReconnecting} />
+      
+      {/* 离线提示 */}
+      <OfflineBanner isOffline={isOffline} />
+
+      {/* 文档标题和连接状态 */}
       <div className="border-b border-gray-200 px-8 py-6">
-        <h1 className="text-3xl font-bold text-gray-900">
-          {document.title}
-        </h1>
-        <div className="mt-2 flex items-center gap-4 text-sm text-gray-500">
-          <span>
-            最后更新: {new Date(document.updated_at).toLocaleString('zh-CN')}
-          </span>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold text-gray-900">
+              {document.title}
+            </h1>
+            <div className="mt-2 flex items-center gap-4 text-sm text-gray-500">
+              <span>
+                最后更新: {new Date(document.updated_at).toLocaleString('zh-CN')}
+              </span>
+            </div>
+          </div>
+          
+          {/* 连接状态指示器 */}
+          <ConnectionStatus provider={provider} />
         </div>
       </div>
 
@@ -118,7 +140,7 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       </div>
 
       {/* 状态栏 */}
-      <EditorStatusBar editor={editor} saveStatus={saveStatus} />
+      <EditorStatusBar editor={editor} saveStatus={saveStatus} provider={provider} />
     </div>
   )
 }
