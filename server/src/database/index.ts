@@ -70,6 +70,19 @@ function initTables() {
     )
   `)
 
+  // 创建文档版本表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS document_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_id INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      version_number INTEGER NOT NULL,
+      description TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+    )
+  `)
+
   // 创建索引
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_documents_created_at 
@@ -79,6 +92,16 @@ function initTables() {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_documents_is_deleted 
     ON documents(is_deleted)
+  `)
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_document_versions_document_id 
+    ON document_versions(document_id)
+  `)
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_document_versions_created_at 
+    ON document_versions(created_at DESC)
   `)
 
   console.log('✅ 数据库表初始化完成')

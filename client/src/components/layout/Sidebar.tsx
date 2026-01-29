@@ -41,6 +41,15 @@ function Sidebar({ isOpen, onDocumentSelect }: SidebarProps) {
     fetchDocuments()
   }, [fetchDocuments])
 
+  // 默认选中第一个文档
+  useEffect(() => {
+    if (!currentDocument && documents.length > 0) {
+      const firstDoc = documents[0]
+      setCurrentDocument(firstDoc)
+      onDocumentSelect?.(firstDoc.id)
+    }
+  }, [documents, currentDocument, setCurrentDocument, onDocumentSelect])
+
   // 搜索防抖
   useEffect(() => {
     const timer = setTimeout(() => {

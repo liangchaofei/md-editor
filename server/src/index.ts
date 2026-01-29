@@ -7,6 +7,7 @@ import { errorHandler } from './middleware/errorHandler.js'
 import { logger } from './middleware/logger.js'
 import { success } from './utils/response.js'
 import documentsRouter from './routes/documents.js'
+import versionsRouter from './routes/versions.js'
 import { startHocuspocusServer } from './hocuspocus.js'
 
 const app = new Koa()
@@ -46,6 +47,7 @@ router.get('/api/db-test', ctx => {
 
 // 注册业务路由
 app.use(documentsRouter.routes()).use(documentsRouter.allowedMethods())
+app.use(versionsRouter.routes()).use(versionsRouter.allowedMethods())
 
 // 注册基础路由
 app.use(router.routes()).use(router.allowedMethods())
