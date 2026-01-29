@@ -9,12 +9,19 @@ interface MenuBarProps {
 }
 
 function MenuBar({ editor }: MenuBarProps) {
+  if (!editor) {
+    return null
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-1 border-b border-gray-200 bg-gray-50 p-2">
       {/* 撤销/重做 */}
       <div className="flex items-center gap-1">
         <button
-          onClick={() => editor.chain().focus().undo().run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().undo().run()
+          }}
           disabled={!editor.can().undo()}
           className="rounded p-2 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent"
           title="撤销 (Ctrl+Z)"
@@ -29,7 +36,10 @@ function MenuBar({ editor }: MenuBarProps) {
           </svg>
         </button>
         <button
-          onClick={() => editor.chain().focus().redo().run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().redo().run()
+          }}
           disabled={!editor.can().redo()}
           className="rounded p-2 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent"
           title="重做 (Ctrl+Shift+Z)"
@@ -50,7 +60,10 @@ function MenuBar({ editor }: MenuBarProps) {
       {/* 文本格式 */}
       <div className="flex items-center gap-1">
         <button
-          onClick={() => editor.chain().focus().toggleBold().run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().toggleBold().run()
+          }}
           className={`rounded p-2 hover:bg-gray-200 ${
             editor.isActive('bold') ? 'bg-gray-200 text-primary-600' : ''
           }`}
@@ -62,7 +75,10 @@ function MenuBar({ editor }: MenuBarProps) {
           </svg>
         </button>
         <button
-          onClick={() => editor.chain().focus().toggleItalic().run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().toggleItalic().run()
+          }}
           className={`rounded p-2 hover:bg-gray-200 ${
             editor.isActive('italic') ? 'bg-gray-200 text-primary-600' : ''
           }`}
@@ -73,7 +89,10 @@ function MenuBar({ editor }: MenuBarProps) {
           </svg>
         </button>
         <button
-          onClick={() => editor.chain().focus().toggleStrike().run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().toggleStrike().run()
+          }}
           className={`rounded p-2 hover:bg-gray-200 ${
             editor.isActive('strike') ? 'bg-gray-200 text-primary-600' : ''
           }`}
@@ -84,7 +103,10 @@ function MenuBar({ editor }: MenuBarProps) {
           </svg>
         </button>
         <button
-          onClick={() => editor.chain().focus().toggleCode().run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().toggleCode().run()
+          }}
           className={`rounded p-2 hover:bg-gray-200 ${
             editor.isActive('code') ? 'bg-gray-200 text-primary-600' : ''
           }`}
@@ -103,7 +125,10 @@ function MenuBar({ editor }: MenuBarProps) {
         {[1, 2, 3].map((level) => (
           <button
             key={level}
-            onClick={() => editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run()}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run()
+            }}
             className={`rounded px-3 py-2 text-sm font-semibold hover:bg-gray-200 ${
               editor.isActive('heading', { level }) ? 'bg-gray-200 text-primary-600' : ''
             }`}
@@ -119,7 +144,10 @@ function MenuBar({ editor }: MenuBarProps) {
       {/* 列表 */}
       <div className="flex items-center gap-1">
         <button
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().toggleBulletList().run()
+          }}
           className={`rounded p-2 hover:bg-gray-200 ${
             editor.isActive('bulletList') ? 'bg-gray-200 text-primary-600' : ''
           }`}
@@ -130,7 +158,10 @@ function MenuBar({ editor }: MenuBarProps) {
           </svg>
         </button>
         <button
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().toggleOrderedList().run()
+          }}
           className={`rounded p-2 hover:bg-gray-200 ${
             editor.isActive('orderedList') ? 'bg-gray-200 text-primary-600' : ''
           }`}
@@ -147,7 +178,10 @@ function MenuBar({ editor }: MenuBarProps) {
       {/* 其他 */}
       <div className="flex items-center gap-1">
         <button
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().toggleBlockquote().run()
+          }}
           className={`rounded p-2 hover:bg-gray-200 ${
             editor.isActive('blockquote') ? 'bg-gray-200 text-primary-600' : ''
           }`}
@@ -158,7 +192,10 @@ function MenuBar({ editor }: MenuBarProps) {
           </svg>
         </button>
         <button
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().toggleCodeBlock().run()
+          }}
           className={`rounded p-2 hover:bg-gray-200 ${
             editor.isActive('codeBlock') ? 'bg-gray-200 text-primary-600' : ''
           }`}
@@ -169,7 +206,10 @@ function MenuBar({ editor }: MenuBarProps) {
           </svg>
         </button>
         <button
-          onClick={() => editor.chain().focus().setHorizontalRule().run()}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().setHorizontalRule().run()
+          }}
           className="rounded p-2 hover:bg-gray-200"
           title="分隔线"
         >

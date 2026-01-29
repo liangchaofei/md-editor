@@ -28,7 +28,10 @@ function BubbleMenu({ editor }: BubbleMenuProps) {
     >
       {/* 加粗 */}
       <button
-        onClick={() => editor.chain().focus().toggleBold().run()}
+        onMouseDown={(e) => {
+          e.preventDefault()
+          editor.chain().focus().toggleBold().run()
+        }}
         className={`rounded p-2 hover:bg-gray-100 ${
           editor.isActive('bold') ? 'bg-gray-100 text-primary-600' : 'text-gray-700'
         }`}
@@ -52,7 +55,10 @@ function BubbleMenu({ editor }: BubbleMenuProps) {
 
       {/* 斜体 */}
       <button
-        onClick={() => editor.chain().focus().toggleItalic().run()}
+        onMouseDown={(e) => {
+          e.preventDefault()
+          editor.chain().focus().toggleItalic().run()
+        }}
         className={`rounded p-2 hover:bg-gray-100 ${
           editor.isActive('italic') ? 'bg-gray-100 text-primary-600' : 'text-gray-700'
         }`}
@@ -70,7 +76,10 @@ function BubbleMenu({ editor }: BubbleMenuProps) {
 
       {/* 删除线 */}
       <button
-        onClick={() => editor.chain().focus().toggleStrike().run()}
+        onMouseDown={(e) => {
+          e.preventDefault()
+          editor.chain().focus().toggleStrike().run()
+        }}
         className={`rounded p-2 hover:bg-gray-100 ${
           editor.isActive('strike') ? 'bg-gray-100 text-primary-600' : 'text-gray-700'
         }`}
@@ -88,7 +97,10 @@ function BubbleMenu({ editor }: BubbleMenuProps) {
 
       {/* 行内代码 */}
       <button
-        onClick={() => editor.chain().focus().toggleCode().run()}
+        onMouseDown={(e) => {
+          e.preventDefault()
+          editor.chain().focus().toggleCode().run()
+        }}
         className={`rounded p-2 hover:bg-gray-100 ${
           editor.isActive('code') ? 'bg-gray-100 text-primary-600' : 'text-gray-700'
         }`}
