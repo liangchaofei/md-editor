@@ -18,6 +18,7 @@ import ConnectionStatus from './ConnectionStatus'
 import OfflineBanner from './OfflineBanner'
 import ReconnectingBanner from './ReconnectingBanner'
 import OnlineUsers from './OnlineUsers'
+import ExportMenu from './ExportMenu'
 import { createYDoc, createHocuspocusProvider } from '../../utils/yjs'
 import { useCollaborationStatus } from '../../hooks/useCollaborationStatus'
 import type { Document } from '../../types/document'
@@ -138,6 +139,9 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
           </div>
           
           <div className="flex flex-col items-end gap-3">
+            {/* 导出按钮 */}
+            <ExportMenu editor={editor} documentTitle={document.title} />
+            
             {/* 连接状态指示器 */}
             <ConnectionStatus provider={provider} />
             
