@@ -5,16 +5,20 @@
 import { useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import Placeholder from '@tiptap/extension-placeholder'
+import CharacterCount from '@tiptap/extension-character-count'
 import BubbleMenu from './BubbleMenu'
 import MenuBar from './MenuBar'
+import EditorStatusBar from './EditorStatusBar'
 import type { Document } from '../../types/document'
 
 interface TiptapEditorProps {
   document: Document
   onUpdate: (content: string) => void
+  saveStatus?: 'saved' | 'saving' | 'unsaved'
 }
 
-function TiptapEditor({ document, onUpdate }: TiptapEditorProps) {
+function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -22,6 +26,10 @@ function TiptapEditor({ document, onUpdate }: TiptapEditorProps) {
           levels: [1, 2, 3, 4, 5, 6],
         },
       }),
+      Placeholder.configure({
+        placeholder: '开始输入内容...',
+      }),
+      CharacterCount,
     ],
     content: document.content || '<p></p>', // 确保至少有一个段落
     editorProps: {
@@ -70,6 +78,9 @@ function TiptapEditor({ document, onUpdate }: TiptapEditorProps) {
       <div className="flex-1 overflow-auto">
         <EditorContent editor={editor} />
       </div>
+
+      {/* 状态栏 */}
+      <EditorStatusBar editor={editor} saveStatus={saveStatus} />
     </div>
   )
 }
