@@ -1060,3 +1060,293 @@ function validateContent(content: string): boolean {
 
 取决于文档大小和版本数量。建议定期清理旧版本或使用压缩。
 
+
+
+---
+
+## 用户体验优化
+
+在完成版本历史功能后，我们还需要优化一些用户体验问题。
+
+### 优化 1：修复页面布局问题
+
+**问题**：工具栏和头部元素把富文本编辑区域顶下去了，导致编辑区域空间不足。
+
+**解决方案**：使用 Flexbox 布局，明确指定各部分的高度行为。
+
+更新 `client/src/components/editor/TiptapEditor.tsx` 的返回部分：
+
+```typescript
+return (
+  <div className="flex h-full flex-col bg-white">
+    {/* 重连提示 */}
+    <ReconnectingBanner isReconnecting={isReconnecting} />
+    
+    {/* 离线提示 */}
+    <OfflineBanner isOffline={isOffline} />
+
+    {/* 文档标题和连接状态 - 固定高度 */}
+    <div className="flex-shrink-0 border-b border-gray-200 px-8 py-4">
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold text-gray-900 truncate">
+            {document.title}
+          </h1>
+          <div className="mt-1 flex items-center gap-4 text-xs text-gray-500">
+            <span>
+              最后更新: {new Date(document.updated_at).toLocaleString('zh-CN')}
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2 ml-4">
+          {/* 版本历史、导出、连接状态、在线用户等按钮 */}
+        </div>
+      </div>
+    </div>
+
+    {/* 固定工具栏 - 固定高度 */}
+    <div className="flex-shrink-0">
+      <MenuBar editor={editor} />
+    </div>
+
+    {/* 编辑器内容 - 占据剩余空间 */}
+    <div className="flex-1 overflow-auto">
+      <EditorContent editor={editor} />
+    </div>
+
+    {/* 状态栏 - 固定高度 */}
+    <div className="flex-shrink-0">
+      <EditorStatusBar editor={editor} saveStatus={saveStatus} provider={provider} />
+    </div>
+  </div>
+)
+```
+
+**关键改进**：
+
+1. **`flex-shrink-0`**：头部、工具栏、状态栏使用此类，防止被压缩
+2. **`flex-1`**：编辑器内容区域使用此类，占据所有剩余空间
+3. **`overflow-auto`**：编辑器内容区域可滚动
+4. **紧凑布局**：减小头部的 padding（从 `py-6` 改为 `py-4`），标题从 `text-3xl` 改为 `text-2xl`
+5. **水平布局**：右侧按钮改为水平排列（`flex items-center gap-2`）
+
+### 优化 2：默认选中第一个文档
+
+**问题**：用户打开应用后，需要手动点击文档才能开始编辑。
+
+**解决方案**：在文档列表加载完成后，自动选中第一个文档。
+
+更新 `client/src/components/layout/Sidebar.tsx`，添加以下代码：
+
+```typescript
+// 组件挂载时获取文档列表
+useEffect(() => {
+  fetchDocuments()
+}, [fetchDocuments])
+
+// 默认选中第一个文档
+useEffect(() => {
+  if (!currentDocument && documents.length > 0) {
+    const firstDoc = documents[0]
+    setCurrentDocument(firstDoc)
+    onDocumentSelect?.(firstDoc.id)
+  }
+}, [documents, currentDocument, setCurrentDocument, onDocumentSelect])
+```
+
+**说明**：
+
+1. 只在没有选中文档且文档列表不为空时执行
+2. 自动选中第一个文档
+3. 触发 `onDocumentSelect` 回调，通知父组件
+
+### 优化 3：侧边栏展开/收起功能
+
+**问题**：侧边栏始终显示，占用屏幕空间，用户无法获得更大的编辑区域。
+
+**解决方案**：添加侧边栏展开/收起按钮，让用户可以自由控制。
+
+#### 步骤 1：更新 Sidebar 组件
+
+在 `client/src/components/layout/Sidebar.tsx` 中：
+
+1. 添加 `onToggle` 属性：
+
+```typescript
+interface SidebarProps {
+  isOpen: boolean
+  onDocumentSelect?: (id: number) => void
+  onToggle?: () => void
+}
+
+function Sidebar({ isOpen, onDocumentSelect, onToggle }: SidebarProps) {
+  // ... 其他代码
+}
+```
+
+2. 在侧边栏底部添加收起按钮：
+
+```typescript
+return (
+  <>
+    <aside className="flex w-64 flex-col border-r border-gray-200 bg-white">
+      {/* 顶部：新建按钮和搜索 */}
+      {/* ... */}
+
+      {/* 文档列表 */}
+      {/* ... */}
+
+      {/* 底部：收起按钮 */}
+      <div className="border-t border-gray-200 p-2">
+        <button
+          onClick={onToggle}
+          className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+          title="收起侧边栏"
+        >
+          <svg
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+            />
+          </svg>
+          <span>收起</span>
+        </button>
+      </div>
+    </aside>
+    {/* ... */}
+  </>
+)
+```
+
+#### 步骤 2：更新 Layout 组件
+
+在 `client/src/components/layout/Layout.tsx` 中：
+
+1. 传递 `onToggle` 回调给 Sidebar：
+
+```typescript
+<Sidebar 
+  isOpen={sidebarOpen}
+  onDocumentSelect={onDocumentSelect}
+  onToggle={() => setSidebarOpen(!sidebarOpen)}
+/>
+```
+
+2. 添加展开按钮（侧边栏收起时显示）：
+
+```typescript
+<main className="flex-1 overflow-auto relative">
+  {/* 展开侧边栏按钮（仅在侧边栏收起时显示） */}
+  {!sidebarOpen && (
+    <button
+      onClick={() => setSidebarOpen(true)}
+      className="fixed left-4 top-20 z-10 flex items-center justify-center w-10 h-10 bg-white border border-gray-300 rounded-lg shadow-lg hover:bg-gray-50 transition-colors"
+      title="展开侧边栏"
+    >
+      <svg
+        className="h-5 w-5 text-gray-600"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M13 5l7 7-7 7M5 5l7 7-7 7"
+        />
+      </svg>
+    </button>
+  )}
+  {children}
+</main>
+```
+
+**功能说明**：
+
+1. **收起按钮**：位于侧边栏底部，点击后隐藏侧边栏
+2. **展开按钮**：侧边栏收起时，在编辑器左上角显示浮动按钮
+3. **平滑过渡**：使用 Tailwind 的 `transition-colors` 实现平滑动画
+4. **图标方向**：收起时箭头向左，展开时箭头向右
+
+### 验证优化效果
+
+1. **布局优化验证**：
+   - 刷新页面
+   - 观察编辑器布局是否合理
+   - 头部和工具栏应该紧凑
+   - 编辑区域应该占据大部分空间
+   - 滚动时只有编辑区域滚动
+
+2. **默认选中验证**：
+   - 刷新页面
+   - 应该自动选中第一个文档
+   - 编辑器应该自动加载该文档内容
+   - 无需手动点击即可开始编辑
+
+3. **侧边栏展开/收起验证**：
+   - 点击侧边栏底部的"收起"按钮
+   - 侧边栏应该隐藏
+   - 编辑区域应该扩展到全宽
+   - 左上角应该出现展开按钮
+   - 点击展开按钮，侧边栏应该重新显示
+
+---
+
+## 第18章总结
+
+在本章中，我们实现了完整的文档版本历史功能，并进行了多项用户体验优化：
+
+### 实现的功能
+
+1. ✅ **版本管理**
+   - 创建版本快照
+   - 查看版本列表
+   - 预览版本内容
+   - 恢复到指定版本
+   - 删除历史版本
+
+2. ✅ **用户界面**
+   - 版本列表侧边栏
+   - 版本预览区域
+   - 版本操作按钮
+   - 时间和大小格式化
+
+3. ✅ **数据管理**
+   - SQLite 版本表
+   - 版本号自动递增
+   - 索引优化查询
+   - 分页加载支持
+
+4. ✅ **用户体验优化**
+   - 修复页面布局问题
+   - 默认选中第一个文档
+   - 侧边栏展开/收起功能
+
+### 技术要点
+
+1. **数据库设计**：使用外键关联文档，添加索引优化查询
+2. **API 设计**：RESTful 风格，支持 CRUD 操作
+3. **UI 组件**：弹窗式界面，列表+预览布局
+4. **时间处理**：使用 date-fns 格式化相对时间
+5. **错误处理**：操作前确认，失败后提示
+6. **布局优化**：使用 Flexbox 实现自适应布局
+7. **交互优化**：自动选中、展开收起等便捷功能
+
+### 下一步
+
+在下一章中，我们将进行性能优化，包括：
+- 编辑器性能优化
+- 协作性能优化
+- 数据库查询优化
+- 前端资源优化
+
+第18章完成！🎉
