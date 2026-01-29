@@ -9,9 +9,10 @@ import Sidebar from './Sidebar'
 
 interface LayoutProps {
   children: React.ReactNode
+  onDocumentSelect?: (id: number) => void
 }
 
-function Layout({ children }: LayoutProps) {
+function Layout({ children, onDocumentSelect }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   return (
@@ -25,7 +26,10 @@ function Layout({ children }: LayoutProps) {
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <Sidebar isOpen={sidebarOpen} />
+        <Sidebar 
+          isOpen={sidebarOpen}
+          onDocumentSelect={onDocumentSelect}
+        />
 
         {/* Main Editor Area */}
         <main className="flex-1 overflow-auto">
