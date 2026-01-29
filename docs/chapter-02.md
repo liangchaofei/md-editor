@@ -1414,6 +1414,60 @@ router.get('/test', ctx => {
 
 VS Code 应该提供完整的类型提示和自动补全。
 
+### 4.12 常见问题排查
+
+#### 问题1：better-sqlite3 原生模块未编译
+
+**错误信息：**
+```
+Error: Could not locate the bindings file
+```
+
+**原因：** `better-sqlite3` 是 C++ 原生模块，pnpm 默认阻止构建脚本。
+
+**解决方案：**
+```bash
+# 手动触发编译
+pnpm --filter server exec npm rebuild better-sqlite3
+
+# 验证
+pnpm dev:server
+```
+
+#### 问题2：Koa 与 Node.js 22 兼容性
+
+**错误信息：**
+```
+TypeError: getGeneratorFunction is not a function
+```
+
+**原因：** Koa 2.14.x 与 Node.js 22 的 ESM 实现存在兼容性问题。
+
+**解决方案：** 已升级到 Koa 2.16.3
+```json
+// server/package.json
+{
+  "dependencies": {
+    "koa": "^2.16.3"  // 使用最新版本
+  }
+}
+```
+
+#### 问题3：TypeScript ESM 配置
+
+**配置要点：**
+```json
+// server/tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",           // 使用较新的 ES 版本
+    "module": "ESNext",           // ESM 模块
+    "moduleResolution": "node",   // Node.js 解析策略
+    "esModuleInterop": true       // 兼容 CommonJS
+  }
+}
+```
+
 ### ✅ 验证通过标准
 
 如果以上所有验证都通过，说明 Chapter 2 实现正确！
@@ -1426,6 +1480,8 @@ VS Code 应该提供完整的类型提示和自动补全。
 - ✅ 错误处理中间件工作正常
 - ✅ 日志中间件输出正确
 - ✅ 优雅关闭功能正常
+- ✅ 原生模块编译成功
+- ✅ Node.js 22 兼容性正常
 
 ---
 

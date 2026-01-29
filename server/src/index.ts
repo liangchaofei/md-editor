@@ -1,7 +1,7 @@
 import Koa from 'koa'
 import cors from '@koa/cors'
 import Router from '@koa/router'
-import { initDatabase, closeDatabase } from './database/index.js'
+import { initDatabase, closeDatabase, getDatabase } from './database/index.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { logger } from './middleware/logger.js'
 import { success } from './utils/response.js'
@@ -34,9 +34,9 @@ router.get('/api/info', ctx => {
 })
 
 // 数据库测试接口
-router.get('/api/db-test', async ctx => {
-  const db = await import('./database/index.js').then(m => m.getDatabase())
-  const result = await db.get('SELECT 1 as test')
+router.get('/api/db-test', ctx => {
+  const db = getDatabase()
+  const result = db.prepare('SELECT 1 as test').get()
   success(ctx, result, '数据库连接正常')
 })
 
@@ -44,17 +44,17 @@ router.get('/api/db-test', async ctx => {
 app.use(router.routes()).use(router.allowedMethods())
 
 // 错误事件监听
-app.on('error', (err, ctx) => {
+app.on('error', err => {
   console.error('❌ 应用错误:', err)
 })
 
 const PORT = process.env.PORT || 3000
 
 // 启动服务器
-async function startServer() {
+function startServer() {
   try {
     // 初始化数据库
-    await initDatabase()
+    initDatabase()
 
     // 启动 HTTP 服务器
     app.listen(PORT, () => {
@@ -74,15 +74,15 @@ async function startServer() {
 }
 
 // 优雅关闭
-process.on('SIGINT', async () => {
+process.on('SIGINT', () => {
   console.log('\n⏳ 正在关闭服务器...')
-  await closeDatabase()
+  closeDatabase()
   process.exit(0)
 })
 
-process.on('SIGTERM', async () => {
+process.on('SIGTERM', () => {
   console.log('\n⏳ 正在关闭服务器...')
-  await closeDatabase()
+  closeDatabase()
   process.exit(0)
 })
 

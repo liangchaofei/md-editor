@@ -3,28 +3,28 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsc && node dist/index.js",
+    "dev:watch": "tsc --watch",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "eslint . --ext ts --report-unused-disable-directives --max-warnings 0"
+    "lint": "eslint . --ext ts"
   },
   "dependencies": {
-    "koa": "^2.15.3",
+    "koa": "^2.16.3",
     "@koa/router": "^13.1.0",
     "@koa/cors": "^5.0.0",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7"
+    "better-sqlite3": "^11.8.1"
   },
   "devDependencies": {
     "@types/koa": "^2.15.0",
     "@types/koa__router": "^12.0.4",
     "@types/koa__cors": "^5.0.0",
     "@types/node": "^22.10.2",
-    "@types/sqlite3": "^3.1.11",
+    "@types/better-sqlite3": "^7.6.12",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
     "eslint": "^9.15.0",
-    "tsx": "^4.19.2",
+    "ts-node": "^10.9.2",
     "typescript": "^5.7.2"
   }
 }

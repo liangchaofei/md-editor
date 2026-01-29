@@ -2,10 +2,10 @@
  * 数据库配置和连接管理
  */
 
-import { open, Database } from 'sqlite'
-import sqlite3 from 'sqlite3'
+import Database from 'better-sqlite3'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import fs from 'fs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -13,30 +13,33 @@ const __dirname = path.dirname(__filename)
 // 数据库文件路径
 const DB_PATH = path.join(__dirname, '../../data/documents.db')
 
-let db: Database | null = null
+let db: Database.Database | null = null
 
 /**
  * 初始化数据库连接
  */
-export async function initDatabase(): Promise<Database> {
+export function initDatabase(): Database.Database {
   if (db) {
     return db
   }
 
   try {
+    // 确保 data 目录存在
+    const dataDir = path.dirname(DB_PATH)
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true })
+    }
+
     // 打开数据库连接
-    db = await open({
-      filename: DB_PATH,
-      driver: sqlite3.Database,
-    })
+    db = new Database(DB_PATH)
 
     console.log('📦 数据库连接成功:', DB_PATH)
 
     // 启用外键约束
-    await db.exec('PRAGMA foreign_keys = ON')
+    db.pragma('foreign_keys = ON')
 
     // 初始化表结构
-    await initTables()
+    initTables()
 
     return db
   } catch (error) {
@@ -48,13 +51,13 @@ export async function initDatabase(): Promise<Database> {
 /**
  * 初始化数据库表
  */
-async function initTables() {
+function initTables() {
   if (!db) {
     throw new Error('数据库未初始化')
   }
 
   // 创建 documents 表
-  await db.exec(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS documents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL DEFAULT '无标题文档',
@@ -68,12 +71,12 @@ async function initTables() {
   `)
 
   // 创建索引
-  await db.exec(`
+  db.exec(`
     CREATE INDEX IF NOT EXISTS idx_documents_created_at 
     ON documents(created_at)
   `)
 
-  await db.exec(`
+  db.exec(`
     CREATE INDEX IF NOT EXISTS idx_documents_is_deleted 
     ON documents(is_deleted)
   `)
@@ -84,7 +87,7 @@ async function initTables() {
 /**
  * 获取数据库实例
  */
-export function getDatabase(): Database {
+export function getDatabase(): Database.Database {
   if (!db) {
     throw new Error('数据库未初始化，请先调用 initDatabase()')
   }
@@ -94,9 +97,9 @@ export function getDatabase(): Database {
 /**
  * 关闭数据库连接
  */
-export async function closeDatabase() {
+export function closeDatabase() {
   if (db) {
-    await db.close()
+    db.close()
     db = null
     console.log('📦 数据库连接已关闭')
   }
