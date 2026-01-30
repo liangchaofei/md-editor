@@ -16,6 +16,7 @@ import { Image } from '@tiptap/extension-image'
 import { TaskList } from '@tiptap/extension-task-list'
 import { TaskItem } from '@tiptap/extension-task-item'
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight'
+import { Markdown } from 'tiptap-markdown'
 import { CustomCollaborationCursor } from '../../extensions/CustomCollaborationCursor'
 import { CustomKeymap } from '../../extensions/CustomKeymap'
 import { SlashCommands, slashCommandSuggestion } from '../../extensions/SlashCommands'
@@ -90,6 +91,12 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       // StarterKit 包含基础扩展（禁用 CodeBlock，使用带高亮的版本）
       StarterKit.configure({
         codeBlock: false,
+      }),
+      // Markdown 支持
+      Markdown.configure({
+        html: true,
+        transformPastedText: true,
+        transformCopiedText: true,
       }),
       Collaboration.configure({
         // 使用 fragment
@@ -282,6 +289,7 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
           <AIChatPanel
             isOpen={isAIPanelOpen}
             onClose={() => setIsAIPanelOpen(false)}
+            editor={editor}
           />
         </div>
       )}

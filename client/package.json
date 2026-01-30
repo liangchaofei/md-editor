@@ -41,6 +41,7 @@
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
     "tippy.js": "^6.3.7",
+    "tiptap-markdown": "^0.9.0",
     "y-indexeddb": "^9.0.12",
     "yjs": "^13.6.29",
     "zustand": "^5.0.10"
