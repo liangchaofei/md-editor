@@ -1,154 +1,114 @@
 /**
  * 浮动工具栏（选中文字时显示）
+ * 只显示改写功能
  */
 
-import { TiptapBubbleMenu } from '@tiptap/react'
+import { useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/react'
+import type { AICommandType } from '../../types/aiCommand'
 
 interface BubbleMenuProps {
   editor: Editor
+  onAICommand?: (type: AICommandType) => void
+  isDialogOpen?: boolean
 }
 
-function BubbleMenu({ editor }: BubbleMenuProps) {
-  if (!editor) {
+function BubbleMenuComponent({ editor, onAICommand, isDialogOpen }: BubbleMenuProps) {
+  const [show, setShow] = useState(false)
+  const [position, setPosition] = useState({ top: 0, left: 0 })
+
+  console.log('BubbleMenuComponent 渲染', { editor: !!editor, onAICommand: !!onAICommand, isDialogOpen })
+
+  useEffect(() => {
+    if (!editor) return
+
+    const updateMenu = () => {
+      const { state, view } = editor
+      const { from, to } = state.selection
+      const isTextSelected = from !== to
+
+      // 如果对话框打开，不显示菜单
+      if (isTextSelected && !isDialogOpen) {
+        // 获取选区的位置
+        const start = view.coordsAtPos(from)
+        const end = view.coordsAtPos(to)
+        
+        // 计算菜单位置（选区上方居中）
+        const left = (start.left + end.left) / 2
+        const top = start.top - 10 // 在选区上方 10px
+        
+        setPosition({ top, left })
+        setShow(true)
+        console.log('显示菜单', { top, left })
+      } else {
+        setShow(false)
+        console.log('隐藏菜单')
+      }
+    }
+
+    editor.on('selectionUpdate', updateMenu)
+    editor.on('transaction', updateMenu)
+
+    return () => {
+      editor.off('selectionUpdate', updateMenu)
+      editor.off('transaction', updateMenu)
+    }
+  }, [editor, isDialogOpen])
+
+  if (!editor || !onAICommand || !show) {
     return null
   }
 
+  const handleRewrite = (e: React.MouseEvent) => {
+    console.log('🔥 改写按钮被点击 - 事件触发')
+    e.preventDefault()
+    e.stopPropagation()
+    console.log('🔥 调用 onAICommand', { type: 'rewrite', hasCallback: !!onAICommand })
+    
+    // 隐藏菜单
+    setShow(false)
+    
+    // 调用 AI 指令（不清除选区，让对话框使用选区信息）
+    onAICommand('rewrite')
+  }
+
+  const handleButtonMouseDown = (e: React.MouseEvent) => {
+    console.log('🖱️ 按钮 mouseDown - 阻止默认行为')
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
   return (
-    <TiptapBubbleMenu
-      editor={editor}
-      tippyOptions={{ duration: 100, placement: 'top', zIndex: 50 }}
-      shouldShow={({ editor, state }) => {
-        // 只在选中文本时显示
-        const { from, to } = state.selection
-        const isTextSelected = from !== to
-        return isTextSelected
+    <div
+      className="fixed flex flex-col bg-white rounded-lg border border-gray-200 shadow-xl py-1 min-w-[120px]"
+      style={{
+        top: `${position.top}px`,
+        left: `${position.left}px`,
+        transform: 'translate(-50%, -100%)',
+        zIndex: 9999,
+        pointerEvents: 'auto',
       }}
-      className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-xl z-50"
+      onMouseDown={(e) => {
+        // 阻止编辑器失去焦点
+        console.log('🖱️ 菜单容器 mouseDown - 阻止默认行为')
+        e.preventDefault()
+        e.stopPropagation()
+      }}
     >
-      {/* 加粗 */}
+      {/* 改写 */}
       <button
-        onMouseDown={(e) => {
-          e.preventDefault()
-          editor.chain().focus().toggleBold().run()
-        }}
-        className={`rounded p-2 hover:bg-gray-100 ${
-          editor.isActive('bold') ? 'bg-gray-100 text-primary-600' : 'text-gray-700'
-        }`}
-        title="加粗 (Ctrl+B)"
+        onMouseDown={handleButtonMouseDown}
+        onClick={handleRewrite}
+        className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left cursor-pointer w-full"
+        style={{ pointerEvents: 'auto' }}
       >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={3}
-            d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"
-          />
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={3}
-            d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"
-          />
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
         </svg>
+        改写
       </button>
-
-      {/* 斜体 */}
-      <button
-        onMouseDown={(e) => {
-          e.preventDefault()
-          editor.chain().focus().toggleItalic().run()
-        }}
-        className={`rounded p-2 hover:bg-gray-100 ${
-          editor.isActive('italic') ? 'bg-gray-100 text-primary-600' : 'text-gray-700'
-        }`}
-        title="斜体 (Ctrl+I)"
-      >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M10 4h4M14 4l-4 16M10 20h4"
-          />
-        </svg>
-      </button>
-
-      {/* 删除线 */}
-      <button
-        onMouseDown={(e) => {
-          e.preventDefault()
-          editor.chain().focus().toggleStrike().run()
-        }}
-        className={`rounded p-2 hover:bg-gray-100 ${
-          editor.isActive('strike') ? 'bg-gray-100 text-primary-600' : 'text-gray-700'
-        }`}
-        title="删除线"
-      >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M3 12h18M9 5h6M9 19h6"
-          />
-        </svg>
-      </button>
-
-      {/* 行内代码 */}
-      <button
-        onMouseDown={(e) => {
-          e.preventDefault()
-          editor.chain().focus().toggleCode().run()
-        }}
-        className={`rounded p-2 hover:bg-gray-100 ${
-          editor.isActive('code') ? 'bg-gray-100 text-primary-600' : 'text-gray-700'
-        }`}
-        title="代码"
-      >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-          />
-        </svg>
-      </button>
-
-      {/* 分隔线 */}
-      <div className="mx-1 h-6 w-px bg-gray-300" />
-
-      {/* 标题 */}
-      <select
-        onChange={(e) => {
-          const level = parseInt(e.target.value)
-          if (level === 0) {
-            editor.chain().focus().setParagraph().run()
-          } else {
-            editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 }).run()
-          }
-        }}
-        value={
-          editor.isActive('heading', { level: 1 }) ? 1 :
-          editor.isActive('heading', { level: 2 }) ? 2 :
-          editor.isActive('heading', { level: 3 }) ? 3 :
-          editor.isActive('heading', { level: 4 }) ? 4 :
-          editor.isActive('heading', { level: 5 }) ? 5 :
-          editor.isActive('heading', { level: 6 }) ? 6 : 0
-        }
-        className="rounded border-0 bg-transparent px-2 py-1 text-sm hover:bg-gray-100 focus:outline-none"
-      >
-        <option value="0">正文</option>
-        <option value="1">标题 1</option>
-        <option value="2">标题 2</option>
-        <option value="3">标题 3</option>
-        <option value="4">标题 4</option>
-        <option value="5">标题 5</option>
-        <option value="6">标题 6</option>
-      </select>
-    </TiptapBubbleMenu>
+    </div>
   )
 }
 
-export default BubbleMenu
+export default BubbleMenuComponent

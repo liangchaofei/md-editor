@@ -20,8 +20,9 @@ import { Markdown } from 'tiptap-markdown'
 import { CustomCollaborationCursor } from '../../extensions/CustomCollaborationCursor'
 import { CustomKeymap } from '../../extensions/CustomKeymap'
 import { SlashCommands, slashCommandSuggestion } from '../../extensions/SlashCommands'
+import { Highlight } from '../../extensions/Highlight'
 import { lowlight } from '../../utils/lowlight'
-import BubbleMenu from './BubbleMenu'
+import BubbleMenuComponent from './BubbleMenu'
 import MenuBar from './MenuBar'
 import EditorStatusBar from './EditorStatusBar'
 import ConnectionStatus from './ConnectionStatus'
@@ -32,10 +33,12 @@ import ExportMenu from './ExportMenu'
 import TableMenu from './TableMenu'
 import VersionHistory from './VersionHistory'
 import AIChatPanel from './AIChatPanel'
+import AICommandDialog from './AICommandDialog'
 import ResizableHandle from './ResizableHandle'
 import { createYDoc, createHocuspocusProvider } from '../../utils/yjs'
 import { useCollaborationStatus } from '../../hooks/useCollaborationStatus'
 import type { Document } from '../../types/document'
+import type { AICommandType } from '../../types/aiCommand'
 
 interface TiptapEditorProps {
   document: Document
@@ -51,6 +54,10 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(true)
   const [editorWidth, setEditorWidth] = useState(60) // 编辑器宽度百分比
   
+  // AI 指令对话框状态
+  const [aiCommandType, setAICommandType] = useState<AICommandType | null>(null)
+  const [isAICommandDialogOpen, setIsAICommandDialogOpen] = useState(false)
+  
   // 处理拖拽调整宽度
   const handleResize = useCallback((deltaX: number) => {
     setEditorWidth(prev => {
@@ -65,6 +72,13 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       const newWidth = Math.max(30, Math.min(80, prev + deltaPercent))
       return newWidth
     })
+  }, [])
+  
+  // 打开 AI 指令对话框
+  const openAICommand = useCallback((type: AICommandType) => {
+    console.log('🎯 TiptapEditor.openAICommand 被调用:', type)
+    setAICommandType(type)
+    setIsAICommandDialogOpen(true)
   }, [])
   
   // 为每个文档创建独立的 Y.Doc 和 Provider
@@ -136,6 +150,10 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       // 代码高亮
       CodeBlockLowlight.configure({
         lowlight,
+      }),
+      // 高亮标记
+      Highlight.configure({
+        multicolor: true,
       }),
       Placeholder.configure({
         placeholder: '开始输入内容... 输入 / 查看命令',
@@ -252,14 +270,18 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
 
         {/* 固定工具栏 - 固定高度 */}
         <div className="flex-shrink-0">
-          <MenuBar editor={editor} />
+          <MenuBar editor={editor} onAICommand={openAICommand} />
         </div>
 
         {/* 表格操作菜单 */}
         <TableMenu editor={editor} />
 
         {/* 浮动工具栏 */}
-        <BubbleMenu editor={editor} />
+        <BubbleMenuComponent 
+          editor={editor} 
+          onAICommand={openAICommand}
+          isDialogOpen={isAICommandDialogOpen}
+        />
 
         {/* 编辑器内容 - 占据剩余空间 */}
         <div className="flex-1 overflow-auto">
@@ -278,6 +300,19 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
           isOpen={isVersionHistoryOpen}
           onClose={() => setIsVersionHistoryOpen(false)}
         />
+
+        {/* AI 指令对话框 */}
+        {aiCommandType && (
+          <AICommandDialog
+            editor={editor}
+            type={aiCommandType}
+            isOpen={isAICommandDialogOpen}
+            onClose={() => {
+              setIsAICommandDialogOpen(false)
+              setAICommandType(null)
+            }}
+          />
+        )}
       </div>
 
       {/* 可拖拽的分隔线 */}

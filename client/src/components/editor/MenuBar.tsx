@@ -4,13 +4,15 @@
 
 import { useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/react'
+import type { AICommandType } from '../../types/aiCommand'
 import ImageUpload from './ImageUpload'
 
 interface MenuBarProps {
   editor: Editor
+  onAICommand?: (type: AICommandType) => void
 }
 
-function MenuBar({ editor }: MenuBarProps) {
+function MenuBar({ editor, onAICommand }: MenuBarProps) {
   // 强制组件在编辑器状态变化时重新渲染
   const [, forceUpdate] = useState({})
 
@@ -288,6 +290,27 @@ function MenuBar({ editor }: MenuBarProps) {
           </svg>
         </button>
       </div>
+
+      {onAICommand && (
+        <>
+          <div className="mx-1 h-6 w-px bg-gray-300" />
+
+          {/* AI 续写按钮 */}
+          <button
+            onMouseDown={(e) => {
+              e.preventDefault()
+              onAICommand('continue')
+            }}
+            className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200"
+            title="AI 续写"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            续写
+          </button>
+        </>
+      )}
     </div>
   )
 }

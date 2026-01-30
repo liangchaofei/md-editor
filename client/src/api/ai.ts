@@ -113,3 +113,96 @@ export async function getModelsAPI() {
   const data = await response.json()
   return data.data
 }
+
+/**
+ * AI 快捷指令 API
+ */
+export async function executeAICommand(params: {
+  type: string
+  context: {
+    selectedText: string
+    beforeText: string
+    afterText: string
+  }
+  userInput?: string
+  model?: string
+  onReasoning?: (reasoning: string) => void
+  onChunk?: (chunk: string) => void
+  onComplete?: () => void
+  onError?: (error: Error) => void
+}): Promise<void> {
+  const {
+    type,
+    context,
+    userInput,
+    model = 'deepseek-chat',
+    onReasoning,
+    onChunk,
+    onComplete,
+    onError,
+  } = params
+
+  try {
+    const response = await fetch('/api/ai/command', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type,
+        context,
+        userInput,
+        model,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    if (!response.body) {
+      throw new Error('Response body is null')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.trim() || !line.startsWith('data: ')) continue
+
+        const data = line.slice(6)
+
+        if (data === '[DONE]') {
+          onComplete?.()
+          return
+        }
+
+        try {
+          const parsed = JSON.parse(data)
+
+          if (parsed.type === 'reasoning' && onReasoning) {
+            onReasoning(parsed.content)
+          } else if (parsed.type === 'content' && onChunk) {
+            onChunk(parsed.content)
+          } else if (parsed.type === 'error') {
+            throw new Error(parsed.content)
+          }
+        } catch (e) {
+          console.error('解析 SSE 数据失败:', e)
+        }
+      }
+    }
+  } catch (error) {
+    console.error('AI 指令执行失败:', error)
+    onError?.(error as Error)
+  }
+}

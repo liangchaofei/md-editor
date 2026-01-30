@@ -5,8 +5,15 @@
 
 import { useState, useRef, useEffect } from 'react'
 import type { Editor } from '@tiptap/react'
+import { marked } from 'marked'
 import { streamChatAPI } from '../../api/ai'
 import type { Message } from '../../types/message'
+
+// 配置 marked 选项
+marked.setOptions({
+  gfm: true,
+  breaks: false,
+})
 
 interface AIChatPanelProps {
   isOpen: boolean
@@ -109,13 +116,10 @@ function AIChatPanel({ isOpen, onClose, editor }: AIChatPanelProps) {
         }
         
         // 只有在有内容时才更新编辑器
-        // 注意：当前版本直接插入纯文本，Markdown格式需要手动应用
-        // TODO: 在后续章节中集成完整的Markdown解析器
         if (accumulatedContent.trim() && editor && !editor.isDestroyed) {
-          // 将换行转换为段落
-          const paragraphs = accumulatedContent.split('\n\n').filter(p => p.trim())
-          const html = paragraphs.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('')
-          editor.commands.setContent(html || '<p></p>')
+          // 使用 marked 将 Markdown 转换为 HTML
+          const html = marked.parse(accumulatedContent, { async: false }) as string
+          editor.commands.setContent(html)
         }
 
         // 记录生成的内容

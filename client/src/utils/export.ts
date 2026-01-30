@@ -71,11 +71,59 @@ const customMarkdownSerializer = new MarkdownSerializer(
     text(state, node) {
       state.text(node.text || '')
     },
+    // 表格支持
+    table(state, node) {
+      // 渲染表格内容
+      state.renderContent(node)
+      state.closeBlock(node)
+    },
+    tableRow(state, node) {
+      // 渲染表格行
+      const cells: string[] = []
+      node.forEach((cell) => {
+        let cellContent = ''
+        cell.forEach((child) => {
+          if (child.isText) {
+            cellContent += child.text
+          } else if (child.type.name === 'paragraph') {
+            child.forEach((textNode) => {
+              if (textNode.isText) {
+                cellContent += textNode.text
+              }
+            })
+          }
+        })
+        cells.push(cellContent || ' ')
+      })
+      state.write('| ' + cells.join(' | ') + ' |\n')
+      
+      // 如果是第一行，添加分隔符
+      if (node === node.parent?.firstChild) {
+        state.write('| ' + cells.map(() => '---').join(' | ') + ' |\n')
+      }
+    },
+    tableCell(state, node) {
+      // 单元格内容由 tableRow 处理
+    },
+    tableHeader(state, node) {
+      // 表头内容由 tableRow 处理
+    },
+    // 任务列表支持
+    taskList(state, node) {
+      state.renderList(node, '  ', () => '- ')
+    },
+    taskItem(state, node) {
+      const checked = node.attrs.checked
+      state.write(checked ? '[x] ' : '[ ] ')
+      state.renderContent(node)
+    },
   },
   {
     // 标记序列化规则
     em: { open: '*', close: '*', mixable: true, expelEnclosingWhitespace: true },
     strong: { open: '**', close: '**', mixable: true, expelEnclosingWhitespace: true },
+    bold: { open: '**', close: '**', mixable: true, expelEnclosingWhitespace: true }, // 添加 bold 别名
+    italic: { open: '*', close: '*', mixable: true, expelEnclosingWhitespace: true }, // 添加 italic 别名
     link: {
       open(_state, _mark, _parent, _index) {
         return '['
@@ -86,6 +134,8 @@ const customMarkdownSerializer = new MarkdownSerializer(
     },
     code: { open: '`', close: '`', escape: false },
     strike: { open: '~~', close: '~~', mixable: true, expelEnclosingWhitespace: true },
+    underline: { open: '', close: '', mixable: true }, // 添加下划线支持（Markdown不支持，忽略）
+    textStyle: { open: '', close: '', mixable: true }, // 添加文本样式支持（忽略）
   }
 )
 

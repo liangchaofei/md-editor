@@ -439,3 +439,15 @@
 .hljs-deletion {
   color: #ef4444;
 }
+
+/* 高亮标记样式 */
+.ProseMirror mark {
+  background-color: #fef08a;
+  color: inherit;
+  padding: 0.125rem 0;
+  border-radius: 0.125rem;
+}
+
+.ProseMirror mark[data-color] {
+  background-color: var(--mark-color, #fef08a);
+}
