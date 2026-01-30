@@ -1,3 +1,100 @@
+# Chapter 21: AI 对话界面基础
+
+## 本章目标
+
+完善 AI 对话面板组件，实现消息列表展示、输入框交互、"正在思考中"状态、Markdown 渲染等功能。
+
+**完成后的功能：**
+- ✅ 实现消息列表展示（用户消息 + AI 回复）
+- ✅ 实现输入框和发送功能
+- ✅ 实现"正在思考中"加载状态
+- ✅ 实现 Markdown 渲染
+- ✅ 实现代码高亮显示
+- ✅ 实现消息时间戳
+- ✅ 集成前端 AI API 客户端
+
+---
+
+## 1. 理论知识
+
+### 1.1 消息数据结构
+
+```typescript
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: number
+  isStreaming?: boolean
+}
+```
+
+### 1.2 Markdown 渲染
+
+使用 `react-markdown` 库渲染 AI 返回的 Markdown 格式内容：
+- 支持标题、列表、代码块等
+- 支持代码语法高亮
+- 支持链接、图片等
+
+### 1.3 流式消息更新
+
+AI 流式响应时，需要实时更新最后一条消息的内容：
+```typescript
+// 每次收到新的 chunk
+setMessages(prev => {
+  const last = prev[prev.length - 1]
+  return [...prev.slice(0, -1), { ...last, content: last.content + chunk }]
+})
+```
+
+---
+
+## 2. 安装依赖
+
+### 2.1 前端依赖
+
+```bash
+cd client
+pnpm add react-markdown remark-gfm rehype-highlight
+```
+
+**依赖说明：**
+- `react-markdown`：Markdown 渲染组件
+- `remark-gfm`：支持 GitHub Flavored Markdown（表格、删除线等）
+- `rehype-highlight`：代码语法高亮
+
+---
+
+## 3. 创建消息类型定义
+
+**创建文件：** `client/src/types/message.ts`
+
+```typescript
+/**
+ * 消息类型定义
+ */
+
+export interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: number
+  isStreaming?: boolean
+}
+
+export type MessageRole = Message['role']
+```
+
+---
+
+## 4. 完善 AI 对话面板组件
+
+**修改文件：** `client/src/components/editor/AIChatPanel.tsx`
+
+
+完整代码如下：
+
+```tsx
 /**
  * AI 对话面板组件
  * 用于显示 AI 对话界面
@@ -211,7 +308,7 @@ function MessageItem({ message }: { message: Message }) {
                 rehypePlugins={[rehypeHighlight]}
                 components={{
                   // 自定义代码块样式
-                  code: ({ node, inline, className, children, ...props }: any) => {
+                  code: ({ node, inline, className, children, ...props }) => {
                     return inline ? (
                       <code className="bg-gray-200 text-purple-600 px-1 py-0.5 rounded text-xs" {...props}>
                         {children}
@@ -238,3 +335,251 @@ function MessageItem({ message }: { message: Message }) {
 }
 
 export default AIChatPanel
+```
+
+**代码说明：**
+- 使用 `useState` 管理消息列表和输入状态
+- 使用 `useRef` 实现自动滚动到底部
+- 使用 `ReactMarkdown` 渲染 AI 回复
+- 支持流式更新消息内容
+- 显示"正在思考中"状态
+- 支持 Enter 发送，Shift+Enter 换行
+
+---
+
+## 5. 创建消息类型文件
+
+**创建文件：** `client/src/types/message.ts`
+
+```typescript
+/**
+ * 消息类型定义
+ */
+
+export interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: number
+  isStreaming?: boolean
+}
+
+export type MessageRole = Message['role']
+```
+
+---
+
+## 6. 添加代码高亮样式
+
+Markdown 代码块需要高亮样式。我们已经在组件中导入了 `highlight.js/styles/github-dark.css`。
+
+如果需要其他主题，可以更换：
+- `github.css` - GitHub 亮色主题
+- `github-dark.css` - GitHub 暗色主题
+- `monokai.css` - Monokai 主题
+- `atom-one-dark.css` - Atom One Dark 主题
+
+---
+
+## 7. 验证功能
+
+### 7.1 启动开发服务器
+
+```bash
+pnpm dev
+```
+
+### 7.2 测试对话功能
+
+1. **打开编辑器**
+   - 访问 http://localhost:5173
+   - 选择一个文档
+   - 右侧应该显示 AI 对话面板
+
+2. **发送消息**
+   - 在输入框输入："你好，请介绍一下你自己"
+   - 点击"发送"按钮或按 Enter
+   - 应该看到：
+     - 用户消息显示在右侧（紫色气泡）
+     - 头部显示"正在思考中..."
+     - AI 回复逐字显示在左侧（灰色气泡）
+     - 回复完成后，思考状态消失
+
+3. **测试 Markdown 渲染**
+   - 输入："请用 Markdown 格式写一个简单的代码示例"
+   - AI 回复应该正确渲染：
+     - 标题、列表等格式
+     - 代码块有语法高亮
+     - 行内代码有特殊样式
+
+4. **测试多轮对话**
+   - 继续发送消息
+   - 消息列表应该保持历史记录
+   - 自动滚动到最新消息
+
+5. **测试快捷键**
+   - Enter 键发送消息
+   - Shift+Enter 换行
+
+---
+
+## 8. 核心知识点
+
+### 8.1 流式消息更新
+
+```typescript
+// 每次收到新的 chunk，更新最后一条消息
+onChunk: (chunk) => {
+  setMessages(prev => {
+    const newMessages = [...prev]
+    const lastMessage = newMessages[newMessages.length - 1]
+    if (lastMessage.role === 'assistant') {
+      lastMessage.content += chunk
+    }
+    return newMessages
+  })
+}
+```
+
+### 8.2 自动滚动
+
+```typescript
+const messagesEndRef = useRef<HTMLDivElement>(null)
+
+useEffect(() => {
+  messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+}, [messages])
+```
+
+### 8.3 Markdown 渲染
+
+```typescript
+<ReactMarkdown
+  remarkPlugins={[remarkGfm]}        // GitHub Flavored Markdown
+  rehypePlugins={[rehypeHighlight]}  // 代码高亮
+>
+  {message.content}
+</ReactMarkdown>
+```
+
+---
+
+## 9. 常见问题
+
+### 9.1 代码高亮不显示
+
+**问题：** 代码块没有语法高亮
+
+**解决：**
+1. 确保导入了 highlight.js 样式
+2. 确保安装了 `rehype-highlight`
+3. 检查代码块的语言标记
+
+### 9.2 消息不自动滚动
+
+**问题：** 新消息出现时不自动滚动到底部
+
+**解决：** 确保 `messagesEndRef` 正确绑定到最后一个元素
+
+### 9.3 流式更新卡顿
+
+**问题：** AI 回复时界面卡顿
+
+**解决：** 可以添加防抖，批量更新消息
+
+---
+
+## 10. 面试考点
+
+### 10.1 React 状态更新
+
+**问题：** 如何在不可变状态中更新数组的最后一个元素？
+
+**答案：**
+```typescript
+setMessages(prev => {
+  const newMessages = [...prev]  // 复制数组
+  const lastMessage = newMessages[newMessages.length - 1]
+  lastMessage.content += chunk   // 修改最后一个元素
+  return newMessages
+})
+```
+
+### 10.2 Markdown 安全性
+
+**问题：** 渲染用户输入的 Markdown 有什么安全风险？
+
+**答案：**
+- XSS 攻击风险
+- react-markdown 默认会转义 HTML
+- 不要使用 `dangerouslySetInnerHTML`
+- 使用 `rehype-sanitize` 插件进一步清理
+
+### 10.3 流式渲染优化
+
+**问题：** 如何优化流式渲染性能？
+
+**答案：**
+1. 使用 `useCallback` 缓存回调函数
+2. 使用 `useMemo` 缓存计算结果
+3. 添加防抖，批量更新
+4. 使用虚拟滚动处理大量消息
+
+---
+
+## 11. 下一步
+
+在下一章（Chapter 22），我们将：
+1. 实现 AI 生成内容流式输出到编辑器
+2. 实现双向同步（对话面板 + 编辑器）
+3. 实现停止生成功能
+4. 实现撤销生成内容
+5. 优化流式输出性能
+
+---
+
+## 12. 本章总结
+
+本章我们完成了 AI 对话界面的基础功能：
+
+**完成的功能：**
+- ✅ 实现消息列表展示
+- ✅ 实现输入框和发送功能
+- ✅ 实现"正在思考中"状态
+- ✅ 实现 Markdown 渲染
+- ✅ 实现代码语法高亮
+- ✅ 实现消息时间戳
+- ✅ 集成前端 AI API 客户端
+- ✅ 实现自动滚动
+
+**技术要点：**
+- React 状态管理
+- 流式数据处理
+- Markdown 渲染
+- 代码高亮
+- 自动滚动
+
+**用户体验：**
+- 实时显示 AI 回复
+- 清晰的消息布局
+- 流畅的交互体验
+- 完整的对话历史
+
+现在 AI 对话界面已经完成，下一章我们将实现最核心的功能：将 AI 生成的内容流式输出到编辑器！
+
+---
+
+**Commit 信息：**
+```
+feat: 实现 AI 对话界面和消息展示
+
+- 完善 AIChatPanel 组件
+- 实现消息列表展示
+- 实现输入框和发送功能
+- 实现"正在思考中"状态
+- 集成 react-markdown 渲染 Markdown
+- 集成 rehype-highlight 代码高亮
+- 实现自动滚动到最新消息
+- 支持 Enter 发送，Shift+Enter 换行
+- 创建 Message 类型定义
+```

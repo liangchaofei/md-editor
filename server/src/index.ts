@@ -2,13 +2,24 @@ import Koa from 'koa'
 import cors from '@koa/cors'
 import bodyParser from '@koa/bodyparser'
 import Router from '@koa/router'
+import dotenv from 'dotenv'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
 import { initDatabase, closeDatabase, getDatabase } from './database/index.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { logger } from './middleware/logger.js'
 import { success } from './utils/response.js'
 import documentsRouter from './routes/documents.js'
 import versionsRouter from './routes/versions.js'
+import aiRouter from './routes/ai.js'
 import { startHocuspocusServer } from './hocuspocus.js'
+
+// 获取当前文件的目录
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+// 加载环境变量（指定 .env 文件路径）
+dotenv.config({ path: join(__dirname, '../.env') })
 
 const app = new Koa()
 const router = new Router()
@@ -48,6 +59,7 @@ router.get('/api/db-test', ctx => {
 // 注册业务路由
 app.use(documentsRouter.routes()).use(documentsRouter.allowedMethods())
 app.use(versionsRouter.routes()).use(versionsRouter.allowedMethods())
+app.use(aiRouter.routes()).use(aiRouter.allowedMethods())
 
 // 注册基础路由
 app.use(router.routes()).use(router.allowedMethods())
@@ -62,6 +74,12 @@ const PORT = process.env.PORT || 3000
 // 启动服务器
 async function startServer() {
   try {
+    // 调试：打印环境变量加载状态
+    console.log('\n🔧 环境变量加载状态:')
+    console.log(`   DEEPSEEK_API_KEY: ${process.env.DEEPSEEK_API_KEY ? '已配置 ✓' : '未配置 ✗'}`)
+    console.log(`   DEEPSEEK_BASE_URL: ${process.env.DEEPSEEK_BASE_URL || '使用默认值'}`)
+    console.log(`   DEEPSEEK_MODEL: ${process.env.DEEPSEEK_MODEL || '使用默认值'}`)
+    
     // 初始化数据库
     initDatabase()
 
