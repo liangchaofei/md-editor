@@ -26,8 +26,9 @@ router.post('/chat', async (ctx) => {
     return
   }
 
-  const { messages, temperature, maxTokens } = ctx.request.body as {
+  const { messages, model, temperature, maxTokens } = ctx.request.body as {
     messages: ChatMessage[]
+    model?: string
     temperature?: number
     maxTokens?: number
   }
@@ -47,28 +48,38 @@ router.post('/chat', async (ctx) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no', // 禁用 nginx 缓冲
   })
 
   ctx.status = 200
+
+  let hasError = false
 
   try {
     // 流式响应
     const stream = streamChat({
       messages,
+      model,  // 传递模型选择
       temperature,
       maxTokens,
     })
 
     for await (const chunk of stream) {
-      // 发送 SSE 数据
-      ctx.res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`)
+      // chunk 已经是 JSON 字符串了，直接发送
+      ctx.res.write(`data: ${chunk}\n\n`)
     }
 
     // 发送完成标记
-    ctx.res.write(`data: [DONE]\n\n`)
-  } catch (error) {
+    if (!hasError) {
+      ctx.res.write(`data: [DONE]\n\n`)
+    }
+  } catch (error: any) {
+    hasError = true
     console.error('AI 聊天错误:', error)
-    ctx.res.write(`data: ${JSON.stringify({ error: '生成失败，请重试' })}\n\n`)
+    
+    // 发送友好的错误信息
+    const errorMessage = error.message || '生成失败，请重试'
+    ctx.res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`)
   } finally {
     ctx.res.end()
   }

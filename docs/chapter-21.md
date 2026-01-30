@@ -583,3 +583,265 @@ feat: 实现 AI 对话界面和消息展示
 - 支持 Enter 发送，Shift+Enter 换行
 - 创建 Message 类型定义
 ```
+
+
+---
+
+## 13. 深度思考模式（DeepSeek Reasoner）
+
+### 13.1 功能说明
+
+DeepSeek 提供两种模型：
+- **deepseek-chat**：普通对话模型，快速响应，直接返回答案
+- **deepseek-reasoner**：推理模型，显示详细的思考过程（类似 OpenAI o1）
+
+### 13.2 实现步骤
+
+#### 1. 添加模型选择
+
+在 AI 面板头部添加模型选择下拉框：
+
+```tsx
+<select
+  value={model}
+  onChange={(e) => setModel(e.target.value as any)}
+  disabled={isThinking}
+  className="text-xs border border-gray-300 rounded px-2 py-1"
+>
+  <option value="deepseek-chat">普通模式</option>
+  <option value="deepseek-reasoner">深度思考</option>
+</select>
+```
+
+#### 2. 修改消息类型
+
+在 `client/src/types/message.ts` 中添加 `reasoning` 字段：
+
+```typescript
+export interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  reasoning?: string  // 思考过程
+  timestamp: number
+  isStreaming?: boolean
+}
+```
+
+#### 3. 后端处理思考过程
+
+在 `server/src/services/ai.ts` 中处理 `reasoning_content` 字段：
+
+```typescript
+for await (const chunk of stream) {
+  const delta = chunk.choices[0]?.delta as any
+  
+  // 处理思考过程
+  if (delta?.reasoning_content) {
+    yield JSON.stringify({
+      type: 'reasoning',
+      content: delta.reasoning_content,
+    })
+  }
+  
+  // 处理正常内容
+  if (delta?.content) {
+    yield JSON.stringify({
+      type: 'content',
+      content: delta.content,
+    })
+  }
+}
+```
+
+**关键点：**
+- 使用 `as any` 绕过 TypeScript 类型检查（OpenAI SDK 类型定义中没有 `reasoning_content`）
+- 返回 JSON 字符串，包含 `type` 和 `content` 字段
+- 后端路由直接发送字符串，避免双重 JSON 编码
+
+#### 4. 前端 API 客户端
+
+在 `client/src/api/ai.ts` 中添加 `onReasoning` 回调：
+
+```typescript
+export interface ChatOptions {
+  messages: ChatMessage[]
+  model?: string  // 模型选择
+  temperature?: number
+  maxTokens?: number
+  onChunk?: (content: string) => void
+  onReasoning?: (reasoning: string) => void  // 思考过程回调
+  onComplete?: () => void
+  onError?: (error: string) => void
+}
+```
+
+解析 SSE 数据时区分类型：
+
+```typescript
+const parsed = JSON.parse(data)
+
+// 处理思考过程
+if (parsed.type === 'reasoning' && parsed.content) {
+  onReasoning?.(parsed.content)
+}
+// 处理正常内容
+else if (parsed.type === 'content' && parsed.content) {
+  onChunk?.(parsed.content)
+}
+```
+
+#### 5. 前端组件显示
+
+在 `AIChatPanel.tsx` 中：
+
+```tsx
+// 发送消息时传递模型
+await streamChatAPI({
+  messages: [...],
+  model,  // 传递选择的模型
+  onReasoning: (reasoning) => {
+    // 更新思考过程
+    setMessages(prev => {
+      const newMessages = [...prev]
+      const lastMessage = newMessages[newMessages.length - 1]
+      if (lastMessage.role === 'assistant') {
+        lastMessage.reasoning = (lastMessage.reasoning || '') + reasoning
+      }
+      return newMessages
+    })
+  },
+  onChunk: (chunk) => {
+    // 更新正文内容
+    // ...
+  },
+})
+```
+
+#### 6. 思考过程 UI
+
+```tsx
+{!isUser && message.reasoning && (
+  <div className="mb-3">
+    {/* 折叠/展开按钮 */}
+    <button onClick={() => setShowReasoning(!showReasoning)}>
+      {isThinking ? '正在思考中' : '深度思考完成'}
+    </button>
+    
+    {/* 思考内容 */}
+    {showReasoning && (
+      <div className="bg-gradient-to-br from-purple-50 to-blue-50 border-l-4 border-purple-400">
+        {message.reasoning}
+      </div>
+    )}
+  </div>
+)}
+```
+
+### 13.3 样式优化
+
+**思考过程区域：**
+- 渐变背景（紫色到蓝色）
+- 左侧紫色边框条
+- 阴影效果
+- 默认展开
+
+**正文区域：**
+- 白色背景，边框
+- 与思考过程明显区分
+
+### 13.4 常见问题
+
+#### 问题 1：没有显示思考过程
+
+**原因：** 使用了 `deepseek-chat` 模型而不是 `deepseek-reasoner`
+
+**解决：** 在 AI 面板右上角选择"深度思考"模式
+
+#### 问题 2：双重 JSON 编码
+
+**原因：** 后端路由中使用了 `JSON.stringify({ content: chunk })`，但 chunk 已经是 JSON 字符串
+
+**解决：** 直接发送 chunk：
+```typescript
+ctx.res.write(`data: ${chunk}\n\n`)  // ✅ 正确
+// 而不是
+ctx.res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`)  // ❌ 错误
+```
+
+#### 问题 3：TypeScript 类型错误
+
+**原因：** OpenAI SDK 类型定义中没有 `reasoning_content` 字段
+
+**解决：** 使用类型断言：
+```typescript
+const delta = chunk.choices[0]?.delta as any
+```
+
+### 13.5 测试深度思考
+
+试试这些问题：
+1. "如果一个房间里有3只猫，每只猫看到2只猫，房间里总共有几只猫？"
+2. "请分析一下为什么天空是蓝色的"
+3. "1+1为什么等于2？"
+
+你会看到 AI 的完整推理过程！
+
+---
+
+## 14. 本章最终总结
+
+本章我们完成了完整的 AI 对话界面：
+
+**核心功能：**
+- ✅ 消息列表展示（用户 + AI）
+- ✅ 输入框和发送功能
+- ✅ "正在思考中"状态
+- ✅ Markdown 渲染
+- ✅ 代码语法高亮
+- ✅ 消息时间戳
+- ✅ 自动滚动
+- ✅ 多轮对话记忆
+- ✅ **深度思考模式**（DeepSeek Reasoner）
+- ✅ **思考过程展示**
+
+**技术亮点：**
+- React 状态管理
+- 流式数据处理
+- SSE 事件解析
+- Markdown 渲染
+- 代码高亮
+- 模型切换
+- 思考过程可视化
+
+**用户体验：**
+- 实时显示 AI 回复
+- 清晰的消息布局
+- 流畅的交互体验
+- 完整的对话历史
+- 思考过程可折叠
+- 视觉区分明显
+
+现在 AI 对话功能已经完全可用，包括深度思考模式！下一章（Chapter 22）我们将实现最核心的功能：**将 AI 生成的内容流式输出到编辑器**！
+
+---
+
+**最终 Commit 信息：**
+```
+feat: 实现 AI 对话界面和深度思考模式
+
+- 完善 AIChatPanel 组件
+- 实现消息列表展示
+- 实现输入框和发送功能
+- 实现"正在思考中"状态
+- 集成 react-markdown 渲染 Markdown
+- 集成 rehype-highlight 代码高亮
+- 实现自动滚动到最新消息
+- 支持 Enter 发送，Shift+Enter 换行
+- 创建 Message 类型定义
+- 添加模型选择功能（chat/reasoner）
+- 实现深度思考模式（DeepSeek Reasoner）
+- 显示思考过程（可折叠）
+- 优化思考过程和正文的视觉区分
+- 修复双重 JSON 编码问题
+```

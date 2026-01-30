@@ -20,6 +20,7 @@ function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
+  const [model, setModel] = useState<'deepseek-chat' | 'deepseek-reasoner'>('deepseek-chat')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 自动滚动到底部
@@ -51,6 +52,7 @@ function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
       id: (Date.now() + 1).toString(),
       role: 'assistant',
       content: '',
+      reasoning: '',  // 思考过程
       timestamp: Date.now(),
       isStreaming: true,
     }
@@ -62,6 +64,18 @@ function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
         ...messages.map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: userMessage.content },
       ],
+      model,  // 传递选择的模型
+      onReasoning: (reasoning) => {
+        // 更新思考过程
+        setMessages(prev => {
+          const newMessages = [...prev]
+          const lastMessage = newMessages[newMessages.length - 1]
+          if (lastMessage.role === 'assistant') {
+            lastMessage.reasoning = (lastMessage.reasoning || '') + reasoning
+          }
+          return newMessages
+        })
+      },
       onChunk: (chunk) => {
         setMessages(prev => {
           const newMessages = [...prev]
@@ -116,15 +130,28 @@ function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
             <span className="text-xs text-purple-600">正在思考中...</span>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          title="收起 AI 面板"
-        >
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 模型选择 */}
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value as any)}
+            disabled={isThinking}
+            className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:bg-gray-100"
+            title="选择模型"
+          >
+            <option value="deepseek-chat">普通模式</option>
+            <option value="deepseek-reasoner">深度思考</option>
+          </select>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            title="收起 AI 面板"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* 内容区域 */}
@@ -178,10 +205,14 @@ function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
 // 消息项组件
 function MessageItem({ message }: { message: Message }) {
   const isUser = message.role === 'user'
+  const [showReasoning, setShowReasoning] = useState(true)  // 默认展开
   const time = new Date(message.timestamp).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
   })
+  
+  // 判断是否正在思考（有思考内容但没有正文）
+  const isThinking = !isUser && message.reasoning && !message.content && message.isStreaming
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -194,44 +225,87 @@ function MessageItem({ message }: { message: Message }) {
           <span className="text-xs text-gray-400">{time}</span>
         </div>
 
-        {/* 消息内容 */}
-        <div
-          className={`rounded-lg px-4 py-2 ${
-            isUser
-              ? 'bg-purple-600 text-white'
-              : 'bg-gray-100 text-gray-900'
-          }`}
-        >
-          {isUser ? (
-            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-          ) : (
-            <div className="prose prose-sm max-w-none">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-                components={{
-                  // 自定义代码块样式
-                  code: ({ node, inline, className, children, ...props }: any) => {
-                    return inline ? (
-                      <code className="bg-gray-200 text-purple-600 px-1 py-0.5 rounded text-xs" {...props}>
-                        {children}
-                      </code>
-                    ) : (
-                      <code className={className} {...props}>
-                        {children}
-                      </code>
-                    )
-                  },
-                }}
-              >
-                {message.content || '...'}
-              </ReactMarkdown>
-              {message.isStreaming && (
-                <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-1" />
+        {/* 思考过程（仅 AI 回复且有思考内容时显示） */}
+        {!isUser && message.reasoning && (
+          <div className="mb-3">
+            <button
+              onClick={() => setShowReasoning(!showReasoning)}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-white border border-gray-300 hover:bg-gray-50 transition-colors w-full"
+            >
+              <svg className={`w-4 h-4 transition-transform flex-shrink-0 ${showReasoning ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              {isThinking ? (
+                <>
+                  <svg className="w-4 h-4 text-green-600 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span className="text-green-700">正在思考中</span>
+                  <span className="text-gray-400 text-xs ml-auto">用时 {Math.floor((Date.now() - message.timestamp) / 1000)} 秒</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 text-purple-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-gray-700">深度思考完成</span>
+                </>
               )}
-            </div>
-          )}
-        </div>
+            </button>
+            {showReasoning && (
+              <div className="mt-2 bg-gradient-to-br from-purple-50 to-blue-50 border-l-4 border-purple-400 rounded-r-lg px-4 py-3 shadow-sm">
+                <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {message.reasoning}
+                  {message.isStreaming && !message.content && (
+                    <span className="inline-block w-2 h-4 bg-purple-400 animate-pulse ml-1" />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 消息内容（只有当有内容时才显示） */}
+        {(isUser || message.content) && (
+          <div
+            className={`rounded-lg px-4 py-3 shadow-sm ${
+              isUser
+                ? 'bg-purple-600 text-white'
+                : 'bg-white border border-gray-200'
+            }`}
+          >
+            {isUser ? (
+              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+            ) : (
+              <div className="prose prose-sm max-w-none">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                  components={{
+                    // 自定义代码块样式
+                    code: ({ node, inline, className, children, ...props }: any) => {
+                      return inline ? (
+                        <code className="bg-gray-200 text-purple-600 px-1 py-0.5 rounded text-xs" {...props}>
+                          {children}
+                        </code>
+                      ) : (
+                        <code className={className} {...props}>
+                          {children}
+                        </code>
+                      )
+                    },
+                  }}
+                >
+                  {message.content || '...'}
+                </ReactMarkdown>
+                {message.isStreaming && message.content && (
+                  <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-1" />
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
