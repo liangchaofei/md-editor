@@ -213,6 +213,37 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
     rejectSuggestion,
   } = useSuggestions(editor)
   
+  // 快捷键：Ctrl+K 打开/关闭 AI 面板，Enter 接受建议，Esc 拒绝建议
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+K 或 Cmd+K
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setIsAIPanelOpen(prev => !prev)
+      }
+      
+      // Ctrl+Enter 接受第一个待处理的建议
+      if (e.key === 'Enter' && e.ctrlKey && suggestions.length > 0) {
+        e.preventDefault()
+        const pendingSuggestion = suggestions.find(s => s.status === 'pending')
+        if (pendingSuggestion) {
+          acceptSuggestion(pendingSuggestion.id)
+        }
+      }
+      
+      // Esc 拒绝第一个待处理的建议
+      if (e.key === 'Escape' && suggestions.length > 0) {
+        const pendingSuggestion = suggestions.find(s => s.status === 'pending')
+        if (pendingSuggestion) {
+          rejectSuggestion(pendingSuggestion.id)
+        }
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [suggestions, acceptSuggestion, rejectSuggestion])
+  
   // 处理 AI 编辑建议（支持流式输出）
   const handleSuggestionsReceived = useCallback((data: AIEditResponse, isStreaming = false) => {
     console.log('🎯 TiptapEditor.handleSuggestionsReceived 被调用')
@@ -394,6 +425,7 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
             isOpen={isAIPanelOpen}
             onClose={() => setIsAIPanelOpen(false)}
             editor={editor}
+            documentId={document.id}
             onSuggestionsReceived={handleSuggestionsReceived}
             onStreamingChange={setIsAIStreaming}
           />

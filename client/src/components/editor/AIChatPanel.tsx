@@ -7,6 +7,9 @@ import { useState, useRef, useEffect } from 'react'
 import type { Editor } from '@tiptap/react'
 import { marked } from 'marked'
 import { streamChatAPI, executeAIEdit } from '../../api/ai'
+import { useChatHistory } from '../../hooks/useChatHistory'
+import { calculateTotalTokens, estimateCost, formatTokens, formatCost } from '../../utils/tokenCounter'
+import { saveModelPreference, loadModelPreference, loadGlobalModelPreference, getModelInfo, AVAILABLE_MODELS } from '../../utils/modelPreferences'
 import type { Message } from '../../types/message'
 import type { AIEditResponse } from '../../types/suggestion'
 
@@ -42,19 +45,33 @@ interface AIChatPanelProps {
   isOpen: boolean
   onClose: () => void
   editor: Editor | null
+  documentId: number  // 新增：文档 ID
   onSuggestionsReceived?: (suggestions: AIEditResponse, isStreaming?: boolean) => { suggestionId?: string } | void
-  onStreamingChange?: (isStreaming: boolean) => void  // 新增：通知父组件流式状态变化
+  onStreamingChange?: (isStreaming: boolean) => void
 }
 
-function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreamingChange }: AIChatPanelProps) {
-  const [messages, setMessages] = useState<Message[]>([])
+function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceived, onStreamingChange }: AIChatPanelProps) {
+  // 使用对话历史 Hook
+  const { messages, addMessage, updateLastMessage, clearHistory } = useChatHistory(documentId)
+  
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
-  const [model, setModel] = useState<string>('deepseek-chat')
-  const [enableDeepThink, setEnableDeepThink] = useState(false) // 是否启用深度思考
+  
+  // 从 localStorage 加载模型偏好
+  const [model, setModel] = useState<string>(() => {
+    return loadModelPreference(documentId) || loadGlobalModelPreference()
+  })
+  
+  // 保存模型偏好
+  useEffect(() => {
+    saveModelPreference(documentId, model)
+  }, [documentId, model])
+  
+  const [enableDeepThink, setEnableDeepThink] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedContent, setGeneratedContent] = useState('')
-  const [hasStartedGenerating, setHasStartedGenerating] = useState(false) // 是否已开始生成正文
+  const [hasStartedGenerating, setHasStartedGenerating] = useState(false)
+  const [showTokenStats, setShowTokenStats] = useState(false)  // 新增：显示 Token 统计
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 自动滚动到底部
@@ -77,12 +94,12 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
       timestamp: Date.now(),
     }
 
-    setMessages(prev => [...prev, userMessage])
+    addMessage(userMessage)  // 使用 Hook 添加消息
     const userInput = input.trim()
     setInput('')
     setIsThinking(true)
     setIsGenerating(true)
-    setHasStartedGenerating(false) // 重置标记
+    setHasStartedGenerating(false)
     
     // 通知父组件开始流式输出
     onStreamingChange?.(true)
@@ -123,7 +140,7 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
         isStreaming: true,
         isGeneratingToEditor: false,
       }
-      setMessages(prev => [...prev, aiMessage])
+      addMessage(aiMessage)  // 使用 Hook 添加消息
 
       let accumulatedContent = ''
 
@@ -136,14 +153,10 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
         userRequest: userInput,
         model: selectedModel,
         onReasoning: (reasoning) => {
-          setMessages(prev => {
-            const newMessages = [...prev]
-            const lastMessage = newMessages[newMessages.length - 1]
-            if (lastMessage.role === 'assistant') {
-              lastMessage.reasoning = (lastMessage.reasoning || '') + reasoning
-            }
-            return newMessages
-          })
+          updateLastMessage(msg => ({
+            ...msg,
+            reasoning: (msg.reasoning || '') + reasoning
+          }))
         },
         onChunk: (chunk) => {
           accumulatedContent += chunk
@@ -184,15 +197,11 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
           console.log(editor?.getText().substring(0, 500))
           
           // 更新消息内容
-          setMessages(prev => {
-            const newMessages = [...prev]
-            const lastMessage = newMessages[newMessages.length - 1]
-            if (lastMessage.role === 'assistant') {
-              lastMessage.content = `根据你的描述，我将为你${data.reasoning || '修改文档'}。\n\n修改建议已在编辑器中标记（删除线 + 绿色高亮），请 hover 查看并选择接受或拒绝。`
-              lastMessage.isStreaming = false
-            }
-            return newMessages
-          })
+          updateLastMessage(msg => ({
+            ...msg,
+            content: `根据你的描述，我将为你${data.reasoning || '修改文档'}。\n\n修改建议已在编辑器中标记（删除线 + 绿色高亮），请 hover 查看并选择接受或拒绝。`,
+            isStreaming: false
+          }))
           
           // 通知父组件处理建议（暂时不使用流式模式）
           if (onSuggestionsReceived) {
@@ -210,15 +219,11 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
           // 通知父组件流式输出结束
           onStreamingChange?.(false)
           
-          setMessages(prev => {
-            const newMessages = [...prev]
-            const lastMessage = newMessages[newMessages.length - 1]
-            if (lastMessage.role === 'assistant') {
-              lastMessage.isStreaming = false
-              lastMessage.isGeneratingToEditor = false
-            }
-            return newMessages
-          })
+          updateLastMessage(msg => ({
+            ...msg,
+            isStreaming: false,
+            isGeneratingToEditor: false
+          }))
         },
         onError: (error) => {
           setIsThinking(false)
@@ -229,15 +234,11 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
           onStreamingChange?.(false)
           
           console.error('AI 编辑错误:', error)
-          setMessages(prev => {
-            const newMessages = [...prev]
-            const lastMessage = newMessages[newMessages.length - 1]
-            if (lastMessage.role === 'assistant') {
-              lastMessage.content = '抱歉，处理你的请求时出错了。请重试。'
-              lastMessage.isStreaming = false
-            }
-            return newMessages
-          })
+          updateLastMessage(msg => ({
+            ...msg,
+            content: '抱歉，处理你的请求时出错了。请重试。',
+            isStreaming: false
+          }))
         },
       })
     } else {
@@ -260,7 +261,7 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
         isStreaming: true,
         isGeneratingToEditor: false,
       }
-      setMessages(prev => [...prev, aiMessage])
+      addMessage(aiMessage)  // 使用 Hook 添加消息
 
       let accumulatedContent = ''
       let updateTimer: ReturnType<typeof setTimeout> | null = null
@@ -276,14 +277,10 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
         model: selectedModel,
         onReasoning: (reasoning) => {
           // 更新思考过程（只在对话面板显示）
-          setMessages(prev => {
-            const newMessages = [...prev]
-            const lastMessage = newMessages[newMessages.length - 1]
-            if (lastMessage.role === 'assistant') {
-              lastMessage.reasoning = (lastMessage.reasoning || '') + reasoning
-            }
-            return newMessages
-          })
+          updateLastMessage(msg => ({
+            ...msg,
+            reasoning: (msg.reasoning || '') + reasoning
+          }))
         },
         onChunk: (chunk) => {
           // 累积内容
@@ -295,14 +292,10 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
             setIsThinking(false) // 思考结束
             
             // 更新消息状态：标记不再是纯思考状态
-            setMessages(prev => {
-              const newMessages = [...prev]
-              const lastMessage = newMessages[newMessages.length - 1]
-              if (lastMessage.role === 'assistant') {
-                lastMessage.isGeneratingToEditor = true
-              }
-              return newMessages
-            })
+            updateLastMessage(msg => ({
+              ...msg,
+              isGeneratingToEditor: true
+            }))
           }
           
           // 记录生成的内容（立即更新状态，用于显示字数）
@@ -340,17 +333,12 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
           // 通知父组件流式输出结束
           onStreamingChange?.(false)
           
-          setMessages(prev => {
-            const newMessages = [...prev]
-            const lastMessage = newMessages[newMessages.length - 1]
-            if (lastMessage.role === 'assistant') {
-              lastMessage.isStreaming = false
-              lastMessage.isGeneratingToEditor = false
-              // 保存生成的内容到消息中（用于显示摘要）
-              lastMessage.content = accumulatedContent
-            }
-            return newMessages
-          })
+          updateLastMessage(msg => ({
+            ...msg,
+            isStreaming: false,
+            isGeneratingToEditor: false,
+            content: accumulatedContent
+          }))
         },
         onError: (error) => {
           setIsThinking(false)
@@ -361,15 +349,11 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
           onStreamingChange?.(false)
           
           console.error('AI 错误:', error)
-          setMessages(prev => {
-            const newMessages = [...prev]
-            const lastMessage = newMessages[newMessages.length - 1]
-            if (lastMessage.role === 'assistant') {
-              lastMessage.content = '抱歉，生成内容时出错了。请重试。'
-              lastMessage.isStreaming = false
-            }
-            return newMessages
-          })
+          updateLastMessage(msg => ({
+            ...msg,
+            content: '抱歉，生成内容时出错了。请重试。',
+            isStreaming: false
+          }))
         },
       })
     }
@@ -425,6 +409,35 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Token 统计按钮 */}
+          <button
+            onClick={() => setShowTokenStats(!showTokenStats)}
+            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            title="Token 统计"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </button>
+          
+          {/* 清空历史按钮 */}
+          {messages.length > 0 && (
+            <button
+              onClick={() => {
+                if (confirm('确定要清空对话历史吗？')) {
+                  clearHistory()
+                  setGeneratedContent('')
+                }
+              }}
+              className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              title="清空对话历史"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
+          
           {/* 调试按钮 */}
           <button
             onClick={() => {
@@ -447,7 +460,7 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
           </button>
           
           {/* 模型选择 */}
-          <div className="relative">
+          <div className="relative group">
             <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
@@ -455,19 +468,52 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
               className="appearance-none text-xs border border-gray-300 rounded-md pl-3 pr-8 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
               title="选择 AI 模型"
             >
-              <optgroup label="DeepSeek">
-                <option value="deepseek-chat">DeepSeek</option>
-              </optgroup>
-              <optgroup label="Kimi">
-                <option value="moonshot-v1-8k">Kimi (8K)</option>
-                <option value="moonshot-v1-32k">Kimi (32K)</option>
-                <option value="moonshot-v1-128k">Kimi (128K)</option>
-              </optgroup>
+              {AVAILABLE_MODELS.map(m => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
             </select>
             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
+            </div>
+            
+            {/* 模型信息提示 */}
+            <div className="hidden group-hover:block absolute right-0 top-full mt-2 w-64 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+              {(() => {
+                const info = getModelInfo(model)
+                if (!info) return null
+                return (
+                  <div className="text-xs space-y-2">
+                    <div>
+                      <div className="font-medium text-gray-900">{info.name}</div>
+                      <div className="text-gray-600 mt-1">{info.description}</div>
+                    </div>
+                    <div className="pt-2 border-t border-gray-200 space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">上下文窗口:</span>
+                        <span className="font-medium">{info.contextWindow}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">定价:</span>
+                        <span className="font-medium text-xs">{info.pricing}</span>
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-gray-200">
+                      <div className="text-gray-600 mb-1">特性:</div>
+                      <div className="flex flex-wrap gap-1">
+                        {info.features.map(f => (
+                          <span key={f} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded">
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           </div>
           
@@ -485,6 +531,36 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreami
 
       {/* 内容区域 */}
       <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Token 统计面板 */}
+        {showTokenStats && (
+          <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+            <div className="text-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">总 Token 数:</span>
+                <span className="font-medium text-gray-900">
+                  {formatTokens(calculateTotalTokens(messages))}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">预估费用:</span>
+                <span className="font-medium text-gray-900">
+                  {formatCost(estimateCost(
+                    calculateTotalTokens(messages.filter(m => m.role === 'user')),
+                    calculateTotalTokens(messages.filter(m => m.role === 'assistant')),
+                    model
+                  ))}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">当前模型:</span>
+                <span className="font-medium text-gray-900">
+                  {getModelInfo(model)?.name || model}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* 消息列表 */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 ? (
