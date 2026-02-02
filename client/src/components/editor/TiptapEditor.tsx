@@ -37,6 +37,7 @@ import AIChatPanel from './AIChatPanel'
 import AICommandDialog from './AICommandDialog'
 import ResizableHandle from './ResizableHandle'
 import SuggestionTooltip from './SuggestionTooltip'
+import ContextMenu from './ContextMenu'
 import { createYDoc, createHocuspocusProvider } from '../../utils/yjs'
 import { useCollaborationStatus } from '../../hooks/useCollaborationStatus'
 import { useSuggestions } from '../../hooks/useSuggestions'
@@ -61,6 +62,10 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
   // AI 指令对话框状态
   const [aiCommandType, setAICommandType] = useState<AICommandType | null>(null)
   const [isAICommandDialogOpen, setIsAICommandDialogOpen] = useState(false)
+  
+  // 右键菜单状态
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false)
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
   
   // AI 流式输出状态
   const [isAIStreaming, setIsAIStreaming] = useState(false)
@@ -243,6 +248,26 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [suggestions, acceptSuggestion, rejectSuggestion])
+  
+  // 右键菜单监听
+  useEffect(() => {
+    if (!editor) return
+
+    const handleContextMenu = (e: MouseEvent) => {
+      // 检查是否在编辑器内
+      const editorElement = window.document.querySelector('.ProseMirror')
+      if (!editorElement || !editorElement.contains(e.target as Node)) {
+        return
+      }
+
+      e.preventDefault()
+      setContextMenuPosition({ x: e.clientX, y: e.clientY })
+      setIsContextMenuOpen(true)
+    }
+
+    window.document.addEventListener('contextmenu', handleContextMenu)
+    return () => window.document.removeEventListener('contextmenu', handleContextMenu)
+  }, [editor])
   
   // 处理 AI 编辑建议（支持流式输出）
   const handleSuggestionsReceived = useCallback((data: AIEditResponse, isStreaming = false) => {
@@ -441,6 +466,15 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
           onReject={rejectSuggestion}
         />
       ))}
+      
+      {/* 右键菜单 */}
+      <ContextMenu
+        editor={editor}
+        isOpen={isContextMenuOpen}
+        position={contextMenuPosition}
+        onClose={() => setIsContextMenuOpen(false)}
+        onAICommand={openAICommand}
+      />
     </div>
   )
 }
