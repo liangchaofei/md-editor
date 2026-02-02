@@ -12,6 +12,58 @@ const router = new Router({
 })
 
 /**
+ * 备用方案：从 AI 文本中提取修改建议
+ * 当 JSON 解析失败时使用
+ */
+function extractChangesFromText(text: string, documentContent: string): {
+  reasoning: string
+  changes: Array<{ target: string; replacement: string; description?: string }>
+} | null {
+  console.log('🔍 开始备用解析...')
+  
+  // 尝试查找类似 "将 XXX 改为 YYY" 的模式
+  const patterns = [
+    /将\s*["'"]([^"'"]+)["'"]\s*改为\s*["'"]([^"'"]+)["'"]/g,
+    /把\s*["'"]([^"'"]+)["'"]\s*改成\s*["'"]([^"'"]+)["'"]/g,
+    /替换\s*["'"]([^"'"]+)["'"]\s*为\s*["'"]([^"'"]+)["'"]/g,
+    /修改\s*["'"]([^"'"]+)["'"]\s*为\s*["'"]([^"'"]+)["'"]/g,
+  ]
+  
+  const changes: Array<{ target: string; replacement: string; description?: string }> = []
+  
+  for (const pattern of patterns) {
+    let match
+    while ((match = pattern.exec(text)) !== null) {
+      const target = match[1].trim()
+      const replacement = match[2].trim()
+      
+      // 直接在文档中查找目标文本
+      if (documentContent.includes(target)) {
+        changes.push({
+          target,
+          replacement,
+          description: `修改: ${target} → ${replacement}`,
+        })
+        
+        console.log(`✅ 提取到修改: "${target}" → "${replacement}"`)
+      } else {
+        console.log(`⚠️ 文档中未找到: "${target}"`)
+      }
+    }
+  }
+  
+  if (changes.length > 0) {
+    return {
+      reasoning: '从文本中提取的修改建议',
+      changes,
+    }
+  }
+  
+  console.log('❌ 备用解析未找到任何修改')
+  return null
+}
+
+/**
  * POST /api/ai/chat
  * 发送聊天消息（流式响应）
  */
@@ -208,6 +260,229 @@ router.post('/command', async (ctx) => {
     console.error('AI 指令错误:', error)
     const errorMessage = error.message || '指令执行失败，请重试'
     ctx.res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`)
+  } finally {
+    ctx.res.end()
+  }
+})
+
+/**
+ * POST /api/ai/edit
+ * AI 对话式文档编辑
+ * 返回结构化的修改建议
+ */
+router.post('/edit', async (ctx) => {
+  // 验证 AI 配置
+  if (!validateAIConfig()) {
+    ctx.status = 503
+    ctx.body = {
+      success: false,
+      message: 'AI 服务未配置',
+    }
+    return
+  }
+
+  const { documentContent, userRequest, model = 'deepseek-chat' } = ctx.request.body as {
+    documentContent: string
+    userRequest: string
+    model?: string
+  }
+
+  // 验证参数
+  if (!documentContent || !userRequest) {
+    ctx.status = 400
+    ctx.body = { error: '缺少必要参数' }
+    return
+  }
+
+  // 构建 Prompt - 强调只返回最相关的一个修改
+  const systemPrompt = `你是一个专业的文档编辑助手。用户会告诉你要修改文档的哪些部分。
+
+【重要】你必须仔细分析用户意图，只返回用户真正想修改的那一个位置。
+
+【输出格式】你必须返回以下 JSON 格式，不要返回其他任何内容：
+\`\`\`json
+{
+  "reasoning": "你的分析：用户想修改哪里，为什么是这个位置",
+  "changes": [
+    {
+      "contextBefore": "目标文本前面的文字（10-30个字符）",
+      "targetText": "要替换的原文",
+      "contextAfter": "目标文本后面的文字（10-30个字符）",
+      "replacement": "替换后的文本",
+      "description": "修改说明"
+    }
+  ]
+}
+\`\`\`
+
+【关键规则】：
+1. 仔细分析用户意图，理解用户想修改哪一个位置
+2. 如果文档中有多个相同的文本，选择最符合用户意图的那一个
+3. 通常用户指的是标题、章节名等重要位置，而不是正文中的普通词汇
+4. **只返回一个修改**，不要返回多个
+5. contextBefore 和 contextAfter 必须足够长，能唯一确定位置
+6. **必须返回有效的 JSON 格式**，可以用 \`\`\`json 包裹
+7. 不要只返回思考过程，必须包含 changes 数组
+
+示例：
+用户："把基础入门改为零基础入门学习"
+
+返回：
+\`\`\`json
+{
+  "reasoning":"用户想修改第一阶段的标题'基础入门'，因为这是一个章节标题",
+  "changes":[{
+    "contextBefore":"第一阶段：",
+    "targetText":"基础入门",
+    "contextAfter":"（1-2个月）",
+    "replacement":"零基础入门学习",
+    "description":"修改第一阶段标题"
+  }]
+}
+\`\`\`
+
+【再次强调】：
+- 必须返回完整的 JSON
+- 只返回一个修改
+- 不要只输出思考过程`
+
+  const userPrompt = `文档内容：
+${documentContent}
+
+用户需求：${userRequest}
+
+请返回 JSON 格式的修改建议。`
+
+  // 设置 SSE 响应头
+  ctx.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+
+  ctx.status = 200
+
+  let hasError = false
+  let accumulatedContent = ''
+
+  try {
+    // 调用 AI 服务
+    const stream = streamChat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      model,
+    })
+
+    for await (const chunk of stream) {
+      const parsed = JSON.parse(chunk)
+      
+      // 累积所有内容用于最后解析 JSON
+      // 注意：reasoning 是思考过程，content 是正文
+      // 我们需要累积 content 部分来提取 JSON
+      if (parsed.type === 'reasoning') {
+        // 思考过程，转发但不累积（因为不包含 JSON）
+        ctx.res.write(`data: ${chunk}\n\n`)
+      } else if (parsed.type === 'content') {
+        // 正文内容，累积并转发
+        accumulatedContent += parsed.content
+        ctx.res.write(`data: ${chunk}\n\n`)
+      } else {
+        // 其他类型，直接转发
+        ctx.res.write(`data: ${chunk}\n\n`)
+      }
+    }
+    
+    console.log('📊 累积内容统计:')
+    console.log('  - 总长度:', accumulatedContent.length)
+    console.log('  - 前100字符:', accumulatedContent.substring(0, 100))
+    console.log('  - 后100字符:', accumulatedContent.substring(Math.max(0, accumulatedContent.length - 100)))
+
+    // 尝试解析累积的内容为 JSON
+    try {
+      // 提取 JSON（可能被包裹在 markdown 代码块中）
+      let jsonStr = accumulatedContent.trim()
+      
+      if (jsonStr.length === 0) {
+        console.error('❌ 累积内容为空，AI 可能只返回了思考过程')
+        throw new Error('AI 未返回有效的修改建议')
+      }
+      
+      console.log('🔍 尝试解析 AI 返回内容')
+      console.log('原始内容长度:', jsonStr.length)
+      console.log('原始内容前200字符:', jsonStr.substring(0, 200))
+      
+      // 移除可能的 markdown 代码块标记
+      if (jsonStr.startsWith('```json')) {
+        jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        console.log('✂️ 移除了 ```json 标记')
+      } else if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        console.log('✂️ 移除了 ``` 标记')
+      }
+      
+      // 尝试查找 JSON 对象
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0]
+        console.log('✂️ 提取了 JSON 对象')
+      }
+      
+      console.log('处理后内容长度:', jsonStr.length)
+      console.log('处理后内容:', jsonStr.substring(0, 500))
+      
+      const result = JSON.parse(jsonStr)
+      console.log('✅ JSON 解析成功')
+      
+      // 验证结果格式
+      if (result.changes && Array.isArray(result.changes)) {
+        console.log(`📊 找到 ${result.changes.length} 个修改建议`)
+        
+        // 只取第一个修改建议
+        const firstChange = result.changes[0]
+        console.log('📝 第一个修改:', JSON.stringify(firstChange, null, 2))
+        
+        // 暂时先不做流式输出，直接返回完整数据
+        // 后续可以优化为流式输出
+        ctx.res.write(`data: ${JSON.stringify({
+          type: 'structured',
+          content: result,
+        })}\n\n`)
+        
+        console.log('✅ 已发送结构化数据')
+      } else {
+        console.warn('⚠️ JSON 格式不正确，缺少 changes 数组')
+      }
+    } catch (parseError) {
+      console.error('❌ 解析 JSON 失败:', parseError)
+      console.error('累积内容:', accumulatedContent.substring(0, 500))
+      
+      // 尝试备用方案：从文本中提取修改信息
+      console.log('🔄 尝试备用解析方案...')
+      try {
+        const backupResult = extractChangesFromText(accumulatedContent, documentContent)
+        if (backupResult && backupResult.changes.length > 0) {
+          console.log('✅ 备用方案成功，提取到修改建议')
+          ctx.res.write(`data: ${JSON.stringify({
+            type: 'structured',
+            content: backupResult,
+          })}\n\n`)
+        }
+      } catch (backupError) {
+        console.error('❌ 备用方案也失败了:', backupError)
+      }
+    }
+
+    if (!hasError) {
+      ctx.res.write(`data: [DONE]\n\n`)
+    }
+  } catch (error: any) {
+    hasError = true
+    console.error('AI 编辑错误:', error)
+    const errorMessage = error.message || '编辑失败，请重试'
+    ctx.res.write(`data: ${JSON.stringify({ type: 'error', content: errorMessage })}\n\n`)
   } finally {
     ctx.res.end()
   }

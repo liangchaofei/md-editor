@@ -451,3 +451,18 @@
 .ProseMirror mark[data-color] {
   background-color: var(--mark-color, #fef08a);
 }
+
+/* AI 修改建议样式 */
+.ProseMirror .suggestion-mark {
+  background-color: #dbeafe;
+  color: #1e40af;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+.ProseMirror .suggestion-mark:hover {
+  background-color: #bfdbfe;
+}

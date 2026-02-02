@@ -21,6 +21,7 @@ import { CustomCollaborationCursor } from '../../extensions/CustomCollaborationC
 import { CustomKeymap } from '../../extensions/CustomKeymap'
 import { SlashCommands, slashCommandSuggestion } from '../../extensions/SlashCommands'
 import { Highlight } from '../../extensions/Highlight'
+import { Suggestion } from '../../extensions/Suggestion'
 import { lowlight } from '../../utils/lowlight'
 import BubbleMenuComponent from './BubbleMenu'
 import MenuBar from './MenuBar'
@@ -35,10 +36,13 @@ import VersionHistory from './VersionHistory'
 import AIChatPanel from './AIChatPanel'
 import AICommandDialog from './AICommandDialog'
 import ResizableHandle from './ResizableHandle'
+import SuggestionTooltip from './SuggestionTooltip'
 import { createYDoc, createHocuspocusProvider } from '../../utils/yjs'
 import { useCollaborationStatus } from '../../hooks/useCollaborationStatus'
+import { useSuggestions } from '../../hooks/useSuggestions'
 import type { Document } from '../../types/document'
 import type { AICommandType } from '../../types/aiCommand'
+import type { AIEditResponse } from '../../types/suggestion'
 
 interface TiptapEditorProps {
   document: Document
@@ -155,6 +159,8 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       Highlight.configure({
         multicolor: true,
       }),
+      // AI 修改建议标记
+      Suggestion,
       Placeholder.configure({
         placeholder: '开始输入内容... 输入 / 查看命令',
       }),
@@ -195,6 +201,72 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       provider.off('synced', handleSynced)
     }
   }, [editor, provider, document.content])
+  
+  // AI 修改建议管理（必须在 editor 定义之后）
+  const {
+    suggestions,
+    addSuggestions,
+    streamReplacementText,
+    acceptSuggestion,
+    rejectSuggestion,
+  } = useSuggestions(editor)
+  
+  // 处理 AI 编辑建议（支持流式输出）
+  const handleSuggestionsReceived = useCallback((data: AIEditResponse, isStreaming = false) => {
+    console.log('🎯 TiptapEditor.handleSuggestionsReceived 被调用')
+    console.log('收到 AI 编辑建议:', data)
+    console.log('流式模式:', isStreaming)
+    console.log('editor 是否存在:', !!editor)
+    console.log('addSuggestions 是否存在:', !!addSuggestions)
+    
+    if (data.changes && data.changes.length > 0) {
+      // 如果 AI 返回了多个修改，只取第一个（最相关的）
+      if (data.changes.length > 1) {
+        console.warn(`⚠️ AI 返回了 ${data.changes.length} 个修改，只应用第一个`)
+      }
+      
+      // 只取第一个修改
+      const firstChange = data.changes[0]
+      console.log('📝 第一个修改:', firstChange)
+      
+      // 转换为新格式
+      const formattedChanges = [{
+        targetText: firstChange.targetText || firstChange.target || firstChange.searchKeywords || '',
+        replacement: firstChange.replacement || '',  // 流式模式下可能为空
+        description: firstChange.description,
+        contextBefore: firstChange.contextBefore,
+        contextAfter: firstChange.contextAfter,
+        isStreaming,  // 传递流式标志
+      }]
+      
+      console.log('📝 格式化后的修改:', formattedChanges)
+      console.log('🚀 准备调用 addSuggestions')
+
+      const result = addSuggestions(formattedChanges)
+      
+      console.log('📊 addSuggestions 返回结果:', result)
+
+      // 如果有错误，显示提示
+      if (result.errors && result.errors.length > 0) {
+        console.error('❌ 建议定位失败:', result.errors[0])
+        return
+      } else if (result.success) {
+        console.log('✅ 建议已成功标记')
+        
+        // 返回第一个建议的 ID（用于流式输出）
+        if (result.suggestions && result.suggestions.length > 0) {
+          return { suggestionId: result.suggestions[0].id }
+        }
+      }
+    }
+  }, [editor, addSuggestions])
+  
+  // 处理流式 replacement 文本
+  const handleReplacementStream = useCallback((suggestionId: string, char: string) => {
+    if (streamReplacementText) {
+      streamReplacementText(suggestionId, char)
+    }
+  }, [streamReplacementText])
 
   if (!editor) {
     return <div className="flex h-full items-center justify-center">加载编辑器...</div>
@@ -325,9 +397,21 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
             isOpen={isAIPanelOpen}
             onClose={() => setIsAIPanelOpen(false)}
             editor={editor}
+            onSuggestionsReceived={handleSuggestionsReceived}
+            onReplacementStream={handleReplacementStream}
           />
         </div>
       )}
+      
+      {/* AI 修改建议 Tooltips */}
+      {suggestions.filter(s => s.status === 'pending').map(suggestion => (
+        <SuggestionTooltip
+          key={suggestion.id}
+          suggestion={suggestion}
+          onAccept={acceptSuggestion}
+          onReject={rejectSuggestion}
+        />
+      ))}
     </div>
   )
 }

@@ -6,8 +6,9 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Editor } from '@tiptap/react'
 import { marked } from 'marked'
-import { streamChatAPI } from '../../api/ai'
+import { streamChatAPI, executeAIEdit } from '../../api/ai'
 import type { Message } from '../../types/message'
+import type { AIEditResponse } from '../../types/suggestion'
 
 // 配置 marked 选项
 marked.setOptions({
@@ -19,13 +20,16 @@ interface AIChatPanelProps {
   isOpen: boolean
   onClose: () => void
   editor: Editor | null
+  onSuggestionsReceived?: (suggestions: AIEditResponse, isStreaming?: boolean) => { suggestionId?: string } | void
+  onReplacementStream?: (suggestionId: string, char: string) => void
 }
 
-function AIChatPanel({ isOpen, onClose, editor }: AIChatPanelProps) {
+function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplacementStream }: AIChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
-  const [model, setModel] = useState<'deepseek-chat' | 'deepseek-reasoner'>('deepseek-chat')
+  const [model, setModel] = useState<string>('deepseek-chat')
+  const [enableDeepThink, setEnableDeepThink] = useState(false) // 是否启用深度思考
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedContent, setGeneratedContent] = useState('')
   const [hasStartedGenerating, setHasStartedGenerating] = useState(false) // 是否已开始生成正文
@@ -52,103 +56,264 @@ function AIChatPanel({ isOpen, onClose, editor }: AIChatPanelProps) {
     }
 
     setMessages(prev => [...prev, userMessage])
+    const userInput = input.trim()
     setInput('')
     setIsThinking(true)
     setIsGenerating(true)
     setHasStartedGenerating(false) // 重置标记
 
-    // 清空编辑器内容
-    editor.commands.clearContent()
-    
-    // 重置状态
-    setGeneratedContent('')
+    // 判断用户意图：是生成新内容还是编辑现有内容
+    const currentContent = editor.getText()
+    const isEditMode = currentContent.length > 0 && (
+      userInput.includes('修改') ||
+      userInput.includes('改为') ||
+      userInput.includes('改成') ||
+      userInput.includes('替换') ||
+      userInput.includes('把') ||
+      userInput.includes('将')
+    )
 
-    // 创建 AI 消息占位符
-    const aiMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: '',
-      reasoning: '',
-      timestamp: Date.now(),
-      isStreaming: true,
-      isGeneratingToEditor: false, // 初始为 false，开始生成正文时才设为 true
+    // 根据深度思考开关选择模型
+    let selectedModel = model
+    if (enableDeepThink) {
+      // 如果启用深度思考，使用对应的思考模型
+      if (model.startsWith('deepseek-')) {
+        selectedModel = 'deepseek-reasoner'
+      }
+      // 注意：Kimi 标准 API (moonshot-v1-*) 不支持思考过程输出
+      // 深度思考对 Kimi 无效，保持原模型
     }
-    setMessages(prev => [...prev, aiMessage])
 
-    let accumulatedContent = ''
+    if (isEditMode) {
+      // 编辑模式：调用 AI 编辑 API
+      console.log('🔧 编辑模式：修改现有内容')
+      
+      // 创建 AI 消息占位符
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '',
+        reasoning: '',
+        timestamp: Date.now(),
+        isStreaming: true,
+        isGeneratingToEditor: false,
+      }
+      setMessages(prev => [...prev, aiMessage])
 
-    // 调用 AI API
-    await streamChatAPI({
-      messages: [
-        ...messages.map(m => ({ role: m.role, content: m.content })),
-        { role: 'user', content: userMessage.content },
-      ],
-      model,
-      onReasoning: (reasoning) => {
-        // 更新思考过程（只在对话面板显示）
-        setMessages(prev => {
-          const newMessages = [...prev]
-          const lastMessage = newMessages[newMessages.length - 1]
-          if (lastMessage.role === 'assistant') {
-            lastMessage.reasoning = (lastMessage.reasoning || '') + reasoning
-          }
-          return newMessages
-        })
-      },
-      onChunk: (chunk) => {
-        // 累积内容
-        accumulatedContent += chunk
-        
-        // 标记已开始生成正文（思考完成）
-        if (!hasStartedGenerating && accumulatedContent.trim()) {
-          setHasStartedGenerating(true)
-          setIsThinking(false) // 思考结束
-          
-          // 更新消息状态：标记不再是纯思考状态
+      let accumulatedContent = ''
+      let currentSuggestionId: string | null = null  // 新增：当前建议的 ID
+
+      // 使用纯文本内容
+      const plainTextContent = editor.getText()
+      console.log('📄 发送给 AI 的纯文本内容（前500字符）:', plainTextContent.substring(0, 500))
+
+      await executeAIEdit({
+        documentContent: plainTextContent,
+        userRequest: userInput,
+        model: selectedModel,
+        onReasoning: (reasoning) => {
           setMessages(prev => {
             const newMessages = [...prev]
             const lastMessage = newMessages[newMessages.length - 1]
             if (lastMessage.role === 'assistant') {
-              lastMessage.isGeneratingToEditor = true
+              lastMessage.reasoning = (lastMessage.reasoning || '') + reasoning
             }
             return newMessages
           })
-        }
-        
-        // 只有在有内容时才更新编辑器
-        if (accumulatedContent.trim() && editor && !editor.isDestroyed) {
-          // 使用 marked 将 Markdown 转换为 HTML
-          const html = marked.parse(accumulatedContent, { async: false }) as string
-          editor.commands.setContent(html)
-        }
-
-        // 记录生成的内容
-        setGeneratedContent(accumulatedContent)
-      },
-      onComplete: () => {
-        setIsThinking(false)
-        setIsGenerating(false)
-        setHasStartedGenerating(false)
-        setMessages(prev => {
-          const newMessages = [...prev]
-          const lastMessage = newMessages[newMessages.length - 1]
-          if (lastMessage.role === 'assistant') {
-            lastMessage.isStreaming = false
-            lastMessage.isGeneratingToEditor = false
-            // 保存生成的内容到消息中（用于显示摘要）
-            lastMessage.content = accumulatedContent
+        },
+        onChunk: (chunk) => {
+          accumulatedContent += chunk
+          
+          // 注意：不要在这里设置 isThinking = false
+          // 因为 DeepSeek Reasoner 可能还在思考
+          // 只有收到 structured 数据或 complete 时才认为完成
+          if (!hasStartedGenerating && accumulatedContent.trim()) {
+            setHasStartedGenerating(true)
+            // 不要设置 setIsThinking(false)，让它继续显示思考状态
           }
-          return newMessages
-        })
-      },
-      onError: (error) => {
-        setIsThinking(false)
-        setIsGenerating(false)
-        setHasStartedGenerating(false)
-        console.error('AI 错误:', error)
-        setMessages(prev => prev.slice(0, -1))
-      },
-    })
+        },
+        onStructured: (data) => {
+          console.log('📝 收到结构化修改建议:', data)
+          console.log('📋 AI 返回的完整数据:', JSON.stringify(data, null, 2))
+          console.log('🔍 检查 data.changes:', data.changes)
+          console.log('🔍 data.changes 类型:', typeof data.changes)
+          console.log('🔍 data.changes 是数组吗?', Array.isArray(data.changes))
+          console.log('🔍 data.changes 长度:', data.changes?.length)
+          
+          // 收到结构化数据，思考完成
+          setIsThinking(false)
+          setHasStartedGenerating(false)
+          
+          if (data.changes && data.changes.length > 0) {
+            const firstChange = data.changes[0]
+            console.log('🎯 第一个修改建议:')
+            console.log('  - contextBefore:', firstChange.contextBefore || '(无)')
+            console.log('  - targetText:', firstChange.targetText || firstChange.target || '(无)')
+            console.log('  - contextAfter:', firstChange.contextAfter || '(无)')
+            console.log('  - replacement:', firstChange.replacement || '(无)')
+            console.log('  - description:', firstChange.description || '(无)')
+          } else {
+            console.error('❌ data.changes 为空或不是数组')
+          }
+          
+          console.log('📄 当前文档内容（前500字符）:')
+          console.log(editor?.getText().substring(0, 500))
+          
+          // 更新消息内容
+          setMessages(prev => {
+            const newMessages = [...prev]
+            const lastMessage = newMessages[newMessages.length - 1]
+            if (lastMessage.role === 'assistant') {
+              lastMessage.content = `根据你的描述，我将为你${data.reasoning || '修改文档'}。\n\n修改建议已在编辑器中标记（删除线 + 绿色高亮），请 hover 查看并选择接受或拒绝。`
+              lastMessage.isStreaming = false
+            }
+            return newMessages
+          })
+          
+          // 通知父组件处理建议（暂时不使用流式模式）
+          if (onSuggestionsReceived) {
+            console.log('📤 调用 onSuggestionsReceived（非流式模式）')
+            onSuggestionsReceived(data as AIEditResponse, false)  // isStreaming = false
+          } else {
+            console.error('❌ onSuggestionsReceived 未定义')
+          }
+        },
+        onComplete: () => {
+          setIsThinking(false)
+          setIsGenerating(false)
+          setHasStartedGenerating(false)
+          currentSuggestionId = null  // 清除 ID
+          setMessages(prev => {
+            const newMessages = [...prev]
+            const lastMessage = newMessages[newMessages.length - 1]
+            if (lastMessage.role === 'assistant') {
+              lastMessage.isStreaming = false
+              lastMessage.isGeneratingToEditor = false
+            }
+            return newMessages
+          })
+        },
+        onError: (error) => {
+          setIsThinking(false)
+          setIsGenerating(false)
+          setHasStartedGenerating(false)
+          console.error('AI 编辑错误:', error)
+          setMessages(prev => {
+            const newMessages = [...prev]
+            const lastMessage = newMessages[newMessages.length - 1]
+            if (lastMessage.role === 'assistant') {
+              lastMessage.content = '抱歉，处理你的请求时出错了。请重试。'
+              lastMessage.isStreaming = false
+            }
+            return newMessages
+          })
+        },
+      })
+    } else {
+      // 生成模式：清空编辑器，生成新内容
+      console.log('✨ 生成模式：创建新内容')
+      
+      // 清空编辑器内容
+      editor.commands.clearContent()
+      
+      // 重置状态
+      setGeneratedContent('')
+
+      // 创建 AI 消息占位符
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '',
+        reasoning: '',
+        timestamp: Date.now(),
+        isStreaming: true,
+        isGeneratingToEditor: false,
+      }
+      setMessages(prev => [...prev, aiMessage])
+
+      let accumulatedContent = ''
+
+      // 调用 AI API
+      await streamChatAPI({
+        messages: [
+          ...messages.map(m => ({ role: m.role, content: m.content })),
+          { role: 'user', content: userMessage.content },
+        ],
+        model: selectedModel,
+        onReasoning: (reasoning) => {
+          // 更新思考过程（只在对话面板显示）
+          setMessages(prev => {
+            const newMessages = [...prev]
+            const lastMessage = newMessages[newMessages.length - 1]
+            if (lastMessage.role === 'assistant') {
+              lastMessage.reasoning = (lastMessage.reasoning || '') + reasoning
+            }
+            return newMessages
+          })
+        },
+        onChunk: (chunk) => {
+          // 累积内容
+          accumulatedContent += chunk
+          
+          // 标记已开始生成正文（思考完成）
+          if (!hasStartedGenerating && accumulatedContent.trim()) {
+            setHasStartedGenerating(true)
+            setIsThinking(false) // 思考结束
+            
+            // 更新消息状态：标记不再是纯思考状态
+            setMessages(prev => {
+              const newMessages = [...prev]
+              const lastMessage = newMessages[newMessages.length - 1]
+              if (lastMessage.role === 'assistant') {
+                lastMessage.isGeneratingToEditor = true
+              }
+              return newMessages
+            })
+          }
+          
+          // 只有在有内容时才更新编辑器
+          if (accumulatedContent.trim() && editor && !editor.isDestroyed) {
+            // 使用 marked 将 Markdown 转换为 HTML
+            const html = marked.parse(accumulatedContent, { async: false }) as string
+            editor.commands.setContent(html)
+          }
+
+          // 记录生成的内容
+          setGeneratedContent(accumulatedContent)
+        },
+        onComplete: () => {
+          setIsThinking(false)
+          setIsGenerating(false)
+          setHasStartedGenerating(false)
+          setMessages(prev => {
+            const newMessages = [...prev]
+            const lastMessage = newMessages[newMessages.length - 1]
+            if (lastMessage.role === 'assistant') {
+              lastMessage.isStreaming = false
+              lastMessage.isGeneratingToEditor = false
+              // 保存生成的内容到消息中（用于显示摘要）
+              lastMessage.content = accumulatedContent
+            }
+            return newMessages
+          })
+        },
+        onError: (error) => {
+          setIsThinking(false)
+          setIsGenerating(false)
+          setHasStartedGenerating(false)
+          console.error('AI 错误:', error)
+          setMessages(prev => {
+            const newMessages = [...prev]
+            const lastMessage = newMessages[newMessages.length - 1]
+            if (lastMessage.role === 'assistant') {
+              lastMessage.content = '抱歉，生成内容时出错了。请重试。'
+              lastMessage.isStreaming = false
+            }
+            return newMessages
+          })
+        },
+      })
+    }
   }
 
   // 停止生成
@@ -193,17 +358,52 @@ function AIChatPanel({ isOpen, onClose, editor }: AIChatPanelProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* 模型选择 */}
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value as any)}
-            disabled={isThinking}
-            className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:bg-gray-100"
-            title="选择模型"
+          {/* 调试按钮 */}
+          <button
+            onClick={() => {
+              if (!editor) return
+              const plainText = editor.getText()
+              console.group('🔍 AI 对话调试信息')
+              console.log('📝 纯文本内容（前500字符）:')
+              console.log(plainText.substring(0, 500))
+              console.log('\n📊 统计:')
+              console.log('纯文本长度:', plainText.length)
+              console.groupEnd()
+              alert('调试信息已打印到控制台（F12）')
+            }}
+            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            title="打印调试信息到控制台"
           >
-            <option value="deepseek-chat">普通模式</option>
-            <option value="deepseek-reasoner">深度思考</option>
-          </select>
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+          
+          {/* 模型选择 */}
+          <div className="relative">
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={isThinking}
+              className="appearance-none text-xs border border-gray-300 rounded-md pl-3 pr-8 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
+              title="选择 AI 模型"
+            >
+              <optgroup label="DeepSeek">
+                <option value="deepseek-chat">DeepSeek</option>
+              </optgroup>
+              <optgroup label="Kimi">
+                <option value="moonshot-v1-8k">Kimi (8K)</option>
+                <option value="moonshot-v1-32k">Kimi (32K)</option>
+                <option value="moonshot-v1-128k">Kimi (128K)</option>
+              </optgroup>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+          
           <button
             onClick={onClose}
             className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
@@ -292,23 +492,57 @@ function AIChatPanel({ isOpen, onClose, editor }: AIChatPanelProps) {
             </div>
           )}
           
-          <div className="flex gap-2">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="输入您的需求... (Enter 发送，Shift+Enter 换行)"
-              disabled={isThinking}
-              className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm resize-none focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:bg-gray-50 disabled:text-gray-500"
-              rows={3}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || isThinking || !editor}
-              className="self-end rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              {isThinking ? '思考中...' : '发送'}
-            </button>
+          <div className="space-y-2">
+            {/* 输入框和发送按钮 */}
+            <div className="flex gap-2">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="输入您的需求... (Enter 发送，Shift+Enter 换行)"
+                disabled={isThinking}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm resize-none focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:bg-gray-50 disabled:text-gray-500"
+                rows={3}
+              />
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || isThinking || !editor}
+                className="self-end rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {isThinking ? '思考中...' : '发送'}
+              </button>
+            </div>
+            
+            {/* 深度思考开关 */}
+            <div className="flex items-center gap-2 px-1">
+              <button
+                onClick={() => setEnableDeepThink(!enableDeepThink)}
+                disabled={isThinking}
+                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  enableDeepThink
+                    ? 'bg-purple-100 text-purple-700 border border-purple-300'
+                    : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={enableDeepThink ? '已启用深度思考' : '点击启用深度思考'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                <span>深度思考</span>
+                {enableDeepThink && (
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+              {enableDeepThink && (
+                <span className="text-xs text-gray-500">
+                  {model.startsWith('deepseek-') 
+                    ? '将使用 DeepSeek Reasoner' 
+                    : '⚠️ Kimi 官方 API 暂不支持思考过程'}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>

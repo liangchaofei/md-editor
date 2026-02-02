@@ -17,7 +17,6 @@ function BubbleMenuComponent({ editor, onAICommand, isDialogOpen }: BubbleMenuPr
   const [show, setShow] = useState(false)
   const [position, setPosition] = useState({ top: 0, left: 0 })
 
-  console.log('BubbleMenuComponent 渲染', { editor: !!editor, onAICommand: !!onAICommand, isDialogOpen })
 
   useEffect(() => {
     if (!editor) return

@@ -46,7 +46,6 @@ export function useCollaborationStatus(provider: HocuspocusProvider | null): Col
     const updateUserCount = () => {
       const userCount = provider.awareness?.getStates().size || 0
       setStatus(prev => ({ ...prev, userCount }))
-      console.log('👥 在线用户数:', userCount)
     }
 
     // 监听 Awareness 变化（用户上线/下线）
