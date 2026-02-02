@@ -43,26 +43,37 @@ export function useSuggestions(editor: Editor | null) {
       console.log('📄 文档长度:', docText.length)
       console.log('🎯 要查找的目标文本:', `"${targetText}"`)
       console.log('📏 目标文本长度:', targetText.length)
+      console.log('⬅️ 前文:', contextBefore || '(无)')
+      console.log('➡️ 后文:', contextAfter || '(无)')
 
       let result: { from: number; to: number } | null = null
 
-      // 如果有上下文，使用上下文定位（更精确）
+      // 优先使用上下文定位（最精确）
       if (contextBefore || contextAfter) {
-        console.log('🎯 使用上下文定位')
+        console.log('🎯 策略1: 使用上下文定位')
         result = findTextWithContext(
           docText,
           contextBefore || '',
           targetText,
           contextAfter || ''
         )
+        
+        if (result) {
+          console.log('✅ 上下文定位成功')
+        } else {
+          console.log('❌ 上下文定位失败，尝试其他策略')
+        }
       }
 
       // 如果上下文定位失败，回退到智能匹配
       if (!result) {
-        console.log('🔄 回退到智能匹配')
+        console.log('🔄 策略2: 回退到智能匹配')
         const smartResult = smartFindText(docText, targetText)
         if (smartResult) {
           result = { from: smartResult.from, to: smartResult.to }
+          console.log('✅ 智能匹配成功')
+        } else {
+          console.log('❌ 智能匹配失败')
         }
       }
 
@@ -151,20 +162,68 @@ export function useSuggestions(editor: Editor | null) {
 
       // 在编辑器中标记 - 使用 diff 展示方式
       try {
+        // 简化方案：直接使用 state.doc.textBetween 来查找位置
+        // 这样可以避免文本位置和文档位置的转换问题
+        
+        console.log('🔍 开始在编辑器中查找文本...')
+        console.log('目标文本:', finalMatchedText)
+        
+        // 在整个文档中搜索匹配的文本
+        let docFrom = -1
+        let docTo = -1
+        
+        // 遍历文档的所有可能位置
+        const docSize = editor.state.doc.content.size
+        for (let pos = 0; pos < docSize - finalMatchedText.length; pos++) {
+          try {
+            const text = editor.state.doc.textBetween(pos, pos + finalMatchedText.length, '')
+            if (text === finalMatchedText) {
+              docFrom = pos
+              docTo = pos + finalMatchedText.length
+              console.log('✅ 找到匹配位置:', { from: docFrom, to: docTo })
+              break
+            }
+          } catch (e) {
+            // 跳过无效位置
+            continue
+          }
+        }
+        
+        if (docFrom === -1 || docTo === -1) {
+          console.error('❌ 无法在文档中找到匹配位置')
+          return {
+            error: '无法在文档中定位文本',
+            target: targetText,
+            suggestion: null,
+          }
+        }
+        
+        // 验证找到的位置
+        const verifyText = editor.state.doc.textBetween(docFrom, docTo, '')
+        console.log('📝 验证文本:', `"${verifyText}"`)
+        
+        if (verifyText !== finalMatchedText) {
+          console.error('❌ 验证失败')
+          return {
+            error: '位置验证失败',
+            target: targetText,
+            suggestion: null,
+          }
+        }
+        
         // 1. 给原文添加删除线
         editor
           .chain()
           .focus()
-          .setTextSelection({ from: result.from, to: result.to })
+          .setTextSelection({ from: docFrom, to: docTo })
           .toggleStrike()  // 添加删除线
           .run()
         
         // 2. 在原文后插入空格
-        const insertPos = result.to
         editor
           .chain()
           .focus()
-          .setTextSelection(insertPos)
+          .setTextSelection(docTo)
           .insertContent(' ')  // 插入空格分隔
           .run()
         
@@ -188,6 +247,10 @@ export function useSuggestions(editor: Editor | null) {
         }
 
         console.log('✅ 成功添加 diff 标记')
+        
+        // 存储文档位置
+        suggestion.from = docFrom
+        suggestion.to = docTo
       } catch (error) {
         console.error('❌ 添加 diff 标记失败:', error)
         return {
@@ -270,16 +333,23 @@ export function useSuggestions(editor: Editor | null) {
       console.log('  - 原文内容:', suggestion.target)
       console.log('  - 新文本:', suggestion.replacement)
 
-      // 策略：使用 replaceRange 一次性完成替换
-      // 1. 计算完整范围：从原文开始到新文本结束（包括空格）
-      // 2. 直接替换为新文本（不带任何标记）
+      // 策略：使用 deleteRange + insertContentAt 一次性完成替换
+      // 注意：suggestion.from 和 suggestion.to 已经是文档位置（不是文本位置）
       
+      // 计算完整范围：原文 + 空格 + 新文本
+      // 原文：from -> to
+      // 空格：to -> to+1
+      // 新文本：to+1 -> to+1+replacement.length
       const spacePos = suggestion.to
       const newTextStart = spacePos + 1
       const newTextEnd = newTextStart + suggestion.replacement.length
       
       console.log('  - 完整范围:', { from: suggestion.from, to: newTextEnd })
       console.log('  - 将替换为:', suggestion.replacement)
+      
+      // 验证当前内容
+      const currentContent = editor.state.doc.textBetween(suggestion.from, newTextEnd, '\n')
+      console.log('  - 当前内容:', `"${currentContent}"`)
       
       // 一次性替换整个范围（原文 + 空格 + 新文本）为纯文本
       editor
@@ -315,6 +385,9 @@ export function useSuggestions(editor: Editor | null) {
       const suggestion = suggestionsRef.current.find(s => s.id === id)
       if (!suggestion) return
 
+      console.log('🎯 拒绝建议:', suggestion)
+      console.log('  - 原文位置:', { from: suggestion.from, to: suggestion.to })
+
       // 1. 移除原文的删除线
       editor
         .chain()
@@ -324,8 +397,12 @@ export function useSuggestions(editor: Editor | null) {
         .run()
       
       // 2. 删除新文本（包括前面的空格）
+      // 空格位置：suggestion.to
+      // 新文本结束：suggestion.to + 1 + replacement.length
       const newTextStart = suggestion.to  // 空格的位置
       const newTextEnd = newTextStart + 1 + suggestion.replacement.length  // +1 是空格
+      
+      console.log('  - 删除范围:', { from: newTextStart, to: newTextEnd })
       
       editor
         .chain()
@@ -342,6 +419,8 @@ export function useSuggestions(editor: Editor | null) {
         s.id === id ? { ...s, status: 'rejected' as const } : s
       )
       updateSuggestions(updatedSuggestions)
+      
+      console.log('✅ 拒绝建议完成')
     },
     [editor, updateSuggestions]
   )

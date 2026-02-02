@@ -3,7 +3,7 @@
  * 显示在建议文本上的 tooltip，提供接受/拒绝按钮
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import type { SuggestedChange } from '../../types/suggestion'
 
 interface SuggestionTooltipProps {
@@ -16,7 +16,8 @@ function SuggestionTooltip({ suggestion, onAccept, onReject }: SuggestionTooltip
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
   const [isVisible, setIsVisible] = useState(false)
   const [isHoveringTooltip, setIsHoveringTooltip] = useState(false)
-  const hideTimeoutRef = useState<NodeJS.Timeout | null>(null)[0]
+  const [isHoveringElement, setIsHoveringElement] = useState(false)
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     // 查找对应的 DOM 元素
@@ -28,9 +29,12 @@ function SuggestionTooltip({ suggestion, onAccept, onReject }: SuggestionTooltip
 
     const handleMouseEnter = () => {
       // 清除隐藏定时器
-      if (hideTimeoutRef) {
-        clearTimeout(hideTimeoutRef)
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current)
+        hideTimeoutRef.current = null
       }
+      
+      setIsHoveringElement(true)
       
       const rect = element.getBoundingClientRect()
       setPosition({
@@ -41,18 +45,14 @@ function SuggestionTooltip({ suggestion, onAccept, onReject }: SuggestionTooltip
     }
 
     const handleMouseLeave = () => {
-      // 延迟隐藏，给用户时间移动到 tooltip
-      const timeout = setTimeout(() => {
+      setIsHoveringElement(false)
+      
+      // 延迟隐藏，给用户时间移动到 tooltip（增加到 500ms）
+      hideTimeoutRef.current = setTimeout(() => {
         if (!isHoveringTooltip) {
           setIsVisible(false)
         }
-      }, 300)
-      
-      if (hideTimeoutRef) {
-        clearTimeout(hideTimeoutRef)
-      }
-      // @ts-ignore
-      hideTimeoutRef = timeout
+      }, 500)
     }
 
     element.addEventListener('mouseenter', handleMouseEnter)
@@ -61,11 +61,27 @@ function SuggestionTooltip({ suggestion, onAccept, onReject }: SuggestionTooltip
     return () => {
       element.removeEventListener('mouseenter', handleMouseEnter)
       element.removeEventListener('mouseleave', handleMouseLeave)
-      if (hideTimeoutRef) {
-        clearTimeout(hideTimeoutRef)
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current)
       }
     }
-  }, [suggestion.id, isHoveringTooltip, hideTimeoutRef])
+  }, [suggestion.id, isHoveringTooltip])
+  
+  // 当鼠标离开 tooltip 时，检查是否还在元素上
+  useEffect(() => {
+    if (!isHoveringTooltip && !isHoveringElement && isVisible) {
+      // 延迟隐藏
+      hideTimeoutRef.current = setTimeout(() => {
+        setIsVisible(false)
+      }, 300)
+    }
+    
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current)
+      }
+    }
+  }, [isHoveringTooltip, isHoveringElement, isVisible])
 
   if (!isVisible || !position) {
     return null
@@ -81,11 +97,21 @@ function SuggestionTooltip({ suggestion, onAccept, onReject }: SuggestionTooltip
       }}
       onMouseEnter={() => {
         setIsHoveringTooltip(true)
+        // 清除隐藏定时器
+        if (hideTimeoutRef.current) {
+          clearTimeout(hideTimeoutRef.current)
+          hideTimeoutRef.current = null
+        }
         setIsVisible(true)
       }}
       onMouseLeave={() => {
         setIsHoveringTooltip(false)
-        setIsVisible(false)
+        // 延迟隐藏
+        hideTimeoutRef.current = setTimeout(() => {
+          if (!isHoveringElement) {
+            setIsVisible(false)
+          }
+        }, 300)
       }}
     >
       <div className="flex items-center gap-2">

@@ -43,11 +43,10 @@ interface AIChatPanelProps {
   onClose: () => void
   editor: Editor | null
   onSuggestionsReceived?: (suggestions: AIEditResponse, isStreaming?: boolean) => { suggestionId?: string } | void
-  onReplacementStream?: (suggestionId: string, char: string) => void
   onStreamingChange?: (isStreaming: boolean) => void  // 新增：通知父组件流式状态变化
 }
 
-function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplacementStream, onStreamingChange }: AIChatPanelProps) {
+function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onStreamingChange }: AIChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
@@ -127,9 +126,8 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplace
       setMessages(prev => [...prev, aiMessage])
 
       let accumulatedContent = ''
-      let currentSuggestionId: string | null = null  // 新增：当前建议的 ID
 
-      // 使用纯文本内容
+      // 使用纯文本内容（不包含 Markdown 语法）
       const plainTextContent = editor.getText()
       console.log('📄 发送给 AI 的纯文本内容（前500字符）:', plainTextContent.substring(0, 500))
 
@@ -208,7 +206,6 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplace
           setIsThinking(false)
           setIsGenerating(false)
           setHasStartedGenerating(false)
-          currentSuggestionId = null  // 清除 ID
           
           // 通知父组件流式输出结束
           onStreamingChange?.(false)

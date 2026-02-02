@@ -209,7 +209,6 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
   const {
     suggestions,
     addSuggestions,
-    streamReplacementText,
     acceptSuggestion,
     rejectSuggestion,
   } = useSuggestions(editor)
@@ -263,13 +262,6 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       }
     }
   }, [editor, addSuggestions])
-  
-  // 处理流式 replacement 文本
-  const handleReplacementStream = useCallback((suggestionId: string, char: string) => {
-    if (streamReplacementText) {
-      streamReplacementText(suggestionId, char)
-    }
-  }, [streamReplacementText])
 
   if (!editor) {
     return <div className="flex h-full items-center justify-center">加载编辑器...</div>
@@ -403,7 +395,6 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
             onClose={() => setIsAIPanelOpen(false)}
             editor={editor}
             onSuggestionsReceived={handleSuggestionsReceived}
-            onReplacementStream={handleReplacementStream}
             onStreamingChange={setIsAIStreaming}
           />
         </div>
