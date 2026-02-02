@@ -126,6 +126,7 @@ export async function executeAICommand(params: {
   }
   userInput?: string
   model?: string
+  signal?: AbortSignal  // 添加中断信号
   onReasoning?: (reasoning: string) => void
   onChunk?: (chunk: string) => void
   onComplete?: () => void
@@ -136,6 +137,7 @@ export async function executeAICommand(params: {
     context,
     userInput,
     model = 'deepseek-chat',
+    signal,  // 接收中断信号
     onReasoning,
     onChunk,
     onComplete,
@@ -154,6 +156,7 @@ export async function executeAICommand(params: {
         userInput,
         model,
       }),
+      signal,  // 传递中断信号
     })
 
     if (!response.ok) {
@@ -169,6 +172,12 @@ export async function executeAICommand(params: {
     let buffer = ''
 
     while (true) {
+      // 检查是否已中断
+      if (signal?.aborted) {
+        reader.cancel()
+        return
+      }
+
       const { done, value } = await reader.read()
       if (done) break
 
@@ -202,6 +211,11 @@ export async function executeAICommand(params: {
       }
     }
   } catch (error) {
+    // 如果是中断错误，不调用 onError
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('AI 指令已中断')
+      return
+    }
     console.error('AI 指令执行失败:', error)
     onError?.(error as Error)
   }
