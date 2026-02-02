@@ -17,11 +17,13 @@ import { TaskList } from '@tiptap/extension-task-list'
 import { TaskItem } from '@tiptap/extension-task-item'
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight'
 import { Markdown } from 'tiptap-markdown'
+import { Dropcursor } from '@tiptap/extension-dropcursor'
 import { CustomCollaborationCursor } from '../../extensions/CustomCollaborationCursor'
 import { CustomKeymap } from '../../extensions/CustomKeymap'
 import { SlashCommands, slashCommandSuggestion } from '../../extensions/SlashCommands'
 import { Highlight } from '../../extensions/Highlight'
 import { Suggestion } from '../../extensions/Suggestion'
+import { DragAndDrop } from '../../extensions/DragAndDrop'
 import { lowlight } from '../../utils/lowlight'
 import BubbleMenuComponent from './BubbleMenu'
 import MenuBar from './MenuBar'
@@ -38,6 +40,7 @@ import AICommandDialog from './AICommandDialog'
 import ResizableHandle from './ResizableHandle'
 import SuggestionTooltip from './SuggestionTooltip'
 import ContextMenu from './ContextMenu'
+import DragHandle from './DragHandle'
 import { createYDoc, createHocuspocusProvider } from '../../utils/yjs'
 import { useCollaborationStatus } from '../../hooks/useCollaborationStatus'
 import { useSuggestions } from '../../hooks/useSuggestions'
@@ -169,6 +172,13 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
       }),
       // AI 修改建议标记
       Suggestion,
+      // 拖拽光标
+      Dropcursor.configure({
+        color: '#3b82f6',
+        width: 2,
+      }),
+      // 拖拽排序
+      DragAndDrop,
       Placeholder.configure({
         placeholder: '开始输入内容... 输入 / 查看命令',
       }),
@@ -409,8 +419,11 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
         />
 
         {/* 编辑器内容 - 占据剩余空间 */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto relative">
           <EditorContent editor={editor} />
+          
+          {/* 拖拽手柄 */}
+          <DragHandle editor={editor} />
         </div>
 
         {/* 状态栏 - 固定高度 */}
