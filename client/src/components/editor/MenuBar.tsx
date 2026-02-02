@@ -2,7 +2,7 @@
  * 固定工具栏（编辑器顶部）
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import type { Editor } from '@tiptap/react'
 import type { AICommandType } from '../../types/aiCommand'
 import ImageUpload from './ImageUpload'
@@ -10,27 +10,43 @@ import ImageUpload from './ImageUpload'
 interface MenuBarProps {
   editor: Editor
   onAICommand?: (type: AICommandType) => void
+  isAIStreaming?: boolean  // 新增：是否正在 AI 流式输出
 }
 
-function MenuBar({ editor, onAICommand }: MenuBarProps) {
-  // 强制组件在编辑器状态变化时重新渲染
+function MenuBar({ editor, onAICommand, isAIStreaming = false }: MenuBarProps) {
+  // 使用节流优化重渲染
   const [, forceUpdate] = useState({})
+  const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!editor) return
 
     const updateHandler = () => {
-      forceUpdate({})
+      // 如果正在 AI 流式输出，不更新工具栏
+      if (isAIStreaming) return
+      
+      // 清除之前的定时器
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current)
+      }
+      
+      // 使用节流，避免频繁更新
+      updateTimerRef.current = setTimeout(() => {
+        forceUpdate({})
+      }, 100) // 100ms 节流
     }
 
+    // 只监听 selectionUpdate，不监听 transaction
+    // transaction 在流式输出时会频繁触发
     editor.on('selectionUpdate', updateHandler)
-    editor.on('transaction', updateHandler)
 
     return () => {
       editor.off('selectionUpdate', updateHandler)
-      editor.off('transaction', updateHandler)
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current)
+      }
     }
-  }, [editor])
+  }, [editor, isAIStreaming])  // 添加 isAIStreaming 到依赖
 
   if (!editor) {
     return null
@@ -88,7 +104,7 @@ function MenuBar({ editor, onAICommand }: MenuBarProps) {
             editor.chain().focus().toggleBold().run()
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
-            editor.isActive('bold') ? 'bg-gray-200 text-primary-600' : ''
+            !isAIStreaming && editor.isActive('bold') ? 'bg-gray-200 text-primary-600' : ''
           }`}
           title="加粗 (Ctrl+B)"
         >
@@ -103,7 +119,7 @@ function MenuBar({ editor, onAICommand }: MenuBarProps) {
             editor.chain().focus().toggleItalic().run()
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
-            editor.isActive('italic') ? 'bg-gray-200 text-primary-600' : ''
+            !isAIStreaming && editor.isActive('italic') ? 'bg-gray-200 text-primary-600' : ''
           }`}
           title="斜体 (Ctrl+I)"
         >
@@ -117,7 +133,7 @@ function MenuBar({ editor, onAICommand }: MenuBarProps) {
             editor.chain().focus().toggleStrike().run()
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
-            editor.isActive('strike') ? 'bg-gray-200 text-primary-600' : ''
+            !isAIStreaming && editor.isActive('strike') ? 'bg-gray-200 text-primary-600' : ''
           }`}
           title="删除线"
         >
@@ -131,7 +147,7 @@ function MenuBar({ editor, onAICommand }: MenuBarProps) {
             editor.chain().focus().toggleCode().run()
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
-            editor.isActive('code') ? 'bg-gray-200 text-primary-600' : ''
+            !isAIStreaming && editor.isActive('code') ? 'bg-gray-200 text-primary-600' : ''
           }`}
           title="代码"
         >
@@ -153,7 +169,7 @@ function MenuBar({ editor, onAICommand }: MenuBarProps) {
               editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run()
             }}
             className={`rounded px-3 py-2 text-sm font-semibold hover:bg-gray-200 ${
-              editor.isActive('heading', { level }) ? 'bg-gray-200 text-primary-600' : ''
+              !isAIStreaming && editor.isActive('heading', { level }) ? 'bg-gray-200 text-primary-600' : ''
             }`}
             title={`标题 ${level}`}
           >
@@ -172,7 +188,7 @@ function MenuBar({ editor, onAICommand }: MenuBarProps) {
             editor.chain().focus().toggleBulletList().run()
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
-            editor.isActive('bulletList') ? 'bg-gray-200 text-primary-600' : ''
+            !isAIStreaming && editor.isActive('bulletList') ? 'bg-gray-200 text-primary-600' : ''
           }`}
           title="无序列表"
         >
@@ -186,7 +202,7 @@ function MenuBar({ editor, onAICommand }: MenuBarProps) {
             editor.chain().focus().toggleOrderedList().run()
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
-            editor.isActive('orderedList') ? 'bg-gray-200 text-primary-600' : ''
+            !isAIStreaming && editor.isActive('orderedList') ? 'bg-gray-200 text-primary-600' : ''
           }`}
           title="有序列表"
         >
@@ -207,7 +223,7 @@ function MenuBar({ editor, onAICommand }: MenuBarProps) {
             editor.chain().focus().toggleBlockquote().run()
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
-            editor.isActive('blockquote') ? 'bg-gray-200 text-primary-600' : ''
+            !isAIStreaming && editor.isActive('blockquote') ? 'bg-gray-200 text-primary-600' : ''
           }`}
           title="引用"
         >
@@ -228,7 +244,7 @@ function MenuBar({ editor, onAICommand }: MenuBarProps) {
             }
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
-            editor.isActive('codeBlock') ? 'bg-gray-200 text-primary-600' : ''
+            !isAIStreaming && editor.isActive('codeBlock') ? 'bg-gray-200 text-primary-600' : ''
           }`}
           title="代码块"
         >
@@ -262,7 +278,7 @@ function MenuBar({ editor, onAICommand }: MenuBarProps) {
             editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
-            editor.isActive('table') ? 'bg-gray-200 text-primary-600' : ''
+            !isAIStreaming && editor.isActive('table') ? 'bg-gray-200 text-primary-600' : ''
           }`}
           title="插入表格"
         >
@@ -281,7 +297,7 @@ function MenuBar({ editor, onAICommand }: MenuBarProps) {
             editor.chain().focus().toggleTaskList().run()
           }}
           className={`rounded p-2 hover:bg-gray-200 ${
-            editor.isActive('taskList') ? 'bg-gray-200 text-primary-600' : ''
+            !isAIStreaming && editor.isActive('taskList') ? 'bg-gray-200 text-primary-600' : ''
           }`}
           title="任务列表"
         >

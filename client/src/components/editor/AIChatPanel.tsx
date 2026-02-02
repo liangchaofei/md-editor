@@ -13,18 +13,41 @@ import type { AIEditResponse } from '../../types/suggestion'
 // 配置 marked 选项
 marked.setOptions({
   gfm: true,
-  breaks: false,
+  breaks: true,  // 启用换行符转换
 })
 
+/**
+ * 更新编辑器内容
+ * 使用 marked 转换 Markdown 为 HTML，然后清理格式
+ */
+function updateEditorContent(editor: Editor | null, markdown: string) {
+  if (!editor || editor.isDestroyed || !markdown.trim()) return
+  
+  try {
+    // 使用 marked 将 Markdown 转换为 HTML
+    let html = marked.parse(markdown, { async: false }) as string
+    
+    // 清理 HTML：移除多余的 <p> 标签包裹
+    // marked 会在列表项内容外包裹 <p>，导致额外的间距
+    html = html.replace(/<li>\s*<p>/g, '<li>')
+    html = html.replace(/<\/p>\s*<\/li>/g, '</li>')
+    
+    // 设置内容
+    editor.commands.setContent(html)
+  } catch (error) {
+    console.error('更新编辑器内容失败:', error)
+  }
+}
 interface AIChatPanelProps {
   isOpen: boolean
   onClose: () => void
   editor: Editor | null
   onSuggestionsReceived?: (suggestions: AIEditResponse, isStreaming?: boolean) => { suggestionId?: string } | void
   onReplacementStream?: (suggestionId: string, char: string) => void
+  onStreamingChange?: (isStreaming: boolean) => void  // 新增：通知父组件流式状态变化
 }
 
-function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplacementStream }: AIChatPanelProps) {
+function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplacementStream, onStreamingChange }: AIChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
@@ -61,6 +84,9 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplace
     setIsThinking(true)
     setIsGenerating(true)
     setHasStartedGenerating(false) // 重置标记
+    
+    // 通知父组件开始流式输出
+    onStreamingChange?.(true)
 
     // 判断用户意图：是生成新内容还是编辑现有内容
     const currentContent = editor.getText()
@@ -183,6 +209,10 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplace
           setIsGenerating(false)
           setHasStartedGenerating(false)
           currentSuggestionId = null  // 清除 ID
+          
+          // 通知父组件流式输出结束
+          onStreamingChange?.(false)
+          
           setMessages(prev => {
             const newMessages = [...prev]
             const lastMessage = newMessages[newMessages.length - 1]
@@ -197,6 +227,10 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplace
           setIsThinking(false)
           setIsGenerating(false)
           setHasStartedGenerating(false)
+          
+          // 通知父组件流式输出结束
+          onStreamingChange?.(false)
+          
           console.error('AI 编辑错误:', error)
           setMessages(prev => {
             const newMessages = [...prev]
@@ -232,6 +266,9 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplace
       setMessages(prev => [...prev, aiMessage])
 
       let accumulatedContent = ''
+      let updateTimer: ReturnType<typeof setTimeout> | null = null
+      let lastUpdateTime = 0
+      const UPDATE_INTERVAL = 100 // 每 100ms 更新一次编辑器
 
       // 调用 AI API
       await streamChatAPI({
@@ -271,20 +308,41 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplace
             })
           }
           
-          // 只有在有内容时才更新编辑器
-          if (accumulatedContent.trim() && editor && !editor.isDestroyed) {
-            // 使用 marked 将 Markdown 转换为 HTML
-            const html = marked.parse(accumulatedContent, { async: false }) as string
-            editor.commands.setContent(html)
-          }
-
-          // 记录生成的内容
+          // 记录生成的内容（立即更新状态，用于显示字数）
           setGeneratedContent(accumulatedContent)
+          
+          // 使用节流更新编辑器，避免频繁触发重渲染
+          const now = Date.now()
+          if (now - lastUpdateTime >= UPDATE_INTERVAL) {
+            lastUpdateTime = now
+            updateEditorContent(editor, accumulatedContent)
+          } else {
+            // 清除之前的定时器
+            if (updateTimer) {
+              clearTimeout(updateTimer)
+            }
+            // 设置新的定时器，确保最后一次更新能执行
+            updateTimer = setTimeout(() => {
+              updateEditorContent(editor, accumulatedContent)
+              lastUpdateTime = Date.now()
+            }, UPDATE_INTERVAL)
+          }
         },
         onComplete: () => {
+          // 清除定时器
+          if (updateTimer) {
+            clearTimeout(updateTimer)
+          }
+          // 确保最后一次更新
+          updateEditorContent(editor, accumulatedContent)
+          
           setIsThinking(false)
           setIsGenerating(false)
           setHasStartedGenerating(false)
+          
+          // 通知父组件流式输出结束
+          onStreamingChange?.(false)
+          
           setMessages(prev => {
             const newMessages = [...prev]
             const lastMessage = newMessages[newMessages.length - 1]
@@ -301,6 +359,10 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplace
           setIsThinking(false)
           setIsGenerating(false)
           setHasStartedGenerating(false)
+          
+          // 通知父组件流式输出结束
+          onStreamingChange?.(false)
+          
           console.error('AI 错误:', error)
           setMessages(prev => {
             const newMessages = [...prev]
@@ -321,6 +383,9 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplace
     setIsGenerating(false)
     setIsThinking(false)
     setHasStartedGenerating(false)
+    
+    // 通知父组件流式输出结束
+    onStreamingChange?.(false)
   }
 
   // 撤销生成的内容
@@ -332,6 +397,11 @@ function AIChatPanel({ isOpen, onClose, editor, onSuggestionsReceived, onReplace
 
     // 重置状态
     setGeneratedContent('')
+    
+    // 通知父组件流式输出结束（如果还在生成中）
+    if (isGenerating) {
+      onStreamingChange?.(false)
+    }
   }
 
   // 按 Enter 发送
