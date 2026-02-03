@@ -467,6 +467,9 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
     // 通知父组件开始流式输出
     onStreamingChange?.(true)
 
+    // 强制使用非 reasoner 模型（生成文档不需要思考过程，直接生成内容更快）
+    const documentModel = model.includes('reasoner') ? 'deepseek-chat' : model
+
     try {
       const response = await fetch('/api/ai/generate-from-outline', {
         method: 'POST',
@@ -477,7 +480,7 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
           documentId,
           outline: outline.nodes,
           originalPrompt: messages.find(m => m.role === 'user')?.content || '',
-          model,
+          model: documentModel,
         }),
       })
 
@@ -513,8 +516,25 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
 
             if (data.type === 'content') {
               accumulatedContent += data.data.content || ''
-              updateEditorContent(editor, accumulatedContent)
-              setGeneratedContent(accumulatedContent)
+              
+              // 清理内容：移除代码块标记和其他问题
+              let cleanContent = accumulatedContent
+              
+              // 移除开头的代码块标记（可能是 ```markdown 或 ```）
+              cleanContent = cleanContent.replace(/^```(?:markdown|md)?\s*\n?/i, '')
+              
+              // 移除结尾的代码块标记
+              cleanContent = cleanContent.replace(/\n?```\s*$/i, '')
+              
+              // 移除可能的 "好的，遵照您的要求..." 等开场白
+              cleanContent = cleanContent.replace(/^好的[，,].*?[。\.]\s*\n*/i, '')
+              cleanContent = cleanContent.replace(/^根据.*?[，,].*?[：:]\s*\n*/i, '')
+              
+              // 确保内容以标题开始（如果不是，则不做处理）
+              cleanContent = cleanContent.trim()
+              
+              updateEditorContent(editor, cleanContent)
+              setGeneratedContent(cleanContent)
             } else if (data.type === 'error') {
               throw new Error(data.data.error || 'Unknown error')
             }

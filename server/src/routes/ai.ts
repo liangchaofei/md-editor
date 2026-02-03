@@ -648,12 +648,9 @@ ${prompt}
     for await (const chunk of stream) {
       const parsed = JSON.parse(chunk)
       
-      console.log('📦 收到 chunk:', parsed.type)
-      
       // 转发思考过程
       if (parsed.type === 'reasoning') {
         hasThinking = true
-        console.log('💭 思考内容（前50字符）:', parsed.content.substring(0, 50))
         const thinkingData = JSON.stringify({
           type: 'thinking',
           data: { thinking: parsed.content }
@@ -662,7 +659,6 @@ ${prompt}
       } else if (parsed.type === 'content') {
         // 累积正文内容
         accumulatedContent += parsed.content
-        console.log('📝 正文内容（前50字符）:', parsed.content.substring(0, 50))
       }
     }
 
@@ -829,12 +825,19 @@ router.post('/generate-from-outline', async (ctx) => {
   const systemPrompt = `你是一个专业的文档写作助手。
 根据提供的大纲，生成完整的文档内容。
 
+【重要】直接输出 Markdown 格式的文档内容，不要使用代码块（```）包裹。
+
 要求：
 1. 严格按照大纲结构生成
-2. 每个章节内容要充实
-3. 使用 Markdown 格式
-4. 保持专业和准确
-5. 使用合适的标题级别（# 为一级标题，## 为二级标题，以此类推）`
+2. 每个章节内容要充实、专业
+3. 使用 Markdown 格式：
+   - 一级标题使用 #
+   - 二级标题使用 ##
+   - 三级标题使用 ###
+   - 列表使用 - 或 1. 2. 3.
+   - 加粗使用 **文字**
+4. 不要在开头或结尾添加 \`\`\`markdown 或 \`\`\` 标记
+5. 直接输出文档内容即可`
 
   const userPrompt = `原始需求：${originalPrompt || '无'}
 
