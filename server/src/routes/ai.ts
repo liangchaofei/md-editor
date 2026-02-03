@@ -542,4 +542,356 @@ ${cleanDocumentContent}
   }
 })
 
+/**
+ * POST /api/ai/generate-outline
+ * 生成文档大纲
+ */
+router.post('/generate-outline', async (ctx) => {
+  // 验证 AI 配置
+  if (!validateAIConfig()) {
+    ctx.status = 503
+    ctx.body = {
+      success: false,
+      message: 'AI 服务未配置',
+    }
+    return
+  }
+
+  const { documentId, prompt, model = 'deepseek-chat' } = ctx.request.body as {
+    documentId: number
+    prompt: string
+    model?: string
+  }
+
+  // 验证参数
+  if (!documentId || !prompt) {
+    ctx.status = 400
+    ctx.body = { error: '缺少必要参数' }
+    return
+  }
+
+  // 构建 Prompt - 针对 Reasoner 模型优化
+  const systemPrompt = `你是一个专业的文档大纲生成助手。
+
+【工作流程】
+1. 先分析用户需求，思考文档结构
+2. 然后输出 JSON 格式的大纲
+
+【大纲要求】
+- 最多 2 层结构（主章节 + 子章节）
+- 主章节 3-5 个
+- 每个主章节的子章节 2-4 个
+- 描述简短（10-20 字）
+
+【输出格式】
+\`\`\`json
+{
+  "title": "文档标题",
+  "nodes": [
+    {
+      "id": "1",
+      "title": "第一章",
+      "description": "简短描述",
+      "level": 0,
+      "order": 0,
+      "children": [
+        {
+          "id": "1-1",
+          "title": "第一节",
+          "description": "简短描述",
+          "level": 1,
+          "order": 0
+        }
+      ]
+    }
+  ]
+}
+\`\`\`
+
+【重要】最终必须输出完整的 JSON 大纲。`
+
+  const userPrompt = `请为以下需求生成文档大纲：
+
+${prompt}
+
+请返回 JSON 格式的大纲。`
+
+  // 设置 SSE 响应头
+  ctx.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+
+  ctx.status = 200
+
+  let hasError = false
+
+  try {
+    console.log('🎯 开始生成大纲')
+    console.log('  - 使用模型:', model)
+    
+    // 调用 AI 服务（支持思考过程）
+    const stream = streamChat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      model,
+      maxTokens: 4000,
+    })
+
+    let accumulatedContent = ''
+    let hasThinking = false
+
+    for await (const chunk of stream) {
+      const parsed = JSON.parse(chunk)
+      
+      console.log('📦 收到 chunk:', parsed.type)
+      
+      // 转发思考过程
+      if (parsed.type === 'reasoning') {
+        hasThinking = true
+        console.log('💭 思考内容（前50字符）:', parsed.content.substring(0, 50))
+        const thinkingData = JSON.stringify({
+          type: 'thinking',
+          data: { thinking: parsed.content }
+        })
+        ctx.res.write(`data: ${thinkingData}\n\n`)
+      } else if (parsed.type === 'content') {
+        // 累积正文内容
+        accumulatedContent += parsed.content
+        console.log('📝 正文内容（前50字符）:', parsed.content.substring(0, 50))
+      }
+    }
+
+    console.log('📊 流式传输结束')
+    console.log('  - 是否有思考过程:', hasThinking)
+    console.log('  - 累积内容长度:', accumulatedContent.length)
+    console.log('  - 累积内容（完整）:')
+    console.log(accumulatedContent)
+
+    // 解析累积的内容为 JSON
+    try {
+      let jsonStr = accumulatedContent.trim()
+      
+      console.log('📊 累积内容统计:')
+      console.log('  - 总长度:', jsonStr.length)
+      console.log('  - 前200字符:', jsonStr.substring(0, 200))
+      console.log('  - 后200字符:', jsonStr.substring(Math.max(0, jsonStr.length - 200)))
+      
+      if (jsonStr.length === 0) {
+        console.error('❌ 累积内容为空，AI 可能只返回了思考过程')
+        throw new Error('AI 未返回大纲内容，请重试')
+      }
+      
+      // 移除可能的 markdown 代码块标记
+      if (jsonStr.startsWith('```json')) {
+        jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        console.log('✂️ 移除了 ```json 标记')
+      } else if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        console.log('✂️ 移除了 ``` 标记')
+      }
+      
+      // 尝试查找 JSON 对象
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0]
+        console.log('✂️ 提取了 JSON 对象')
+      } else {
+        console.error('❌ 未找到 JSON 对象')
+        console.log('完整内容:', jsonStr)
+        throw new Error('AI 返回的内容中未找到有效的 JSON 格式')
+      }
+      
+      // 检查 JSON 是否完整（简单的括号匹配）
+      const openBraces = (jsonStr.match(/\{/g) || []).length
+      const closeBraces = (jsonStr.match(/\}/g) || []).length
+      const openBrackets = (jsonStr.match(/\[/g) || []).length
+      const closeBrackets = (jsonStr.match(/\]/g) || []).length
+      
+      console.log('🔍 JSON 结构检查:')
+      console.log(`  - 大括号: ${openBraces} 开 / ${closeBraces} 闭`)
+      console.log(`  - 方括号: ${openBrackets} 开 / ${closeBrackets} 闭`)
+      
+      if (openBraces !== closeBraces || openBrackets !== closeBrackets) {
+        console.error('❌ JSON 结构不完整')
+        throw new Error(`AI 返回的 JSON 不完整（大括号: ${openBraces}/${closeBraces}, 方括号: ${openBrackets}/${closeBrackets}）。可能是生成被中断或超出 Token 限制。请尝试简化需求或重试。`)
+      }
+      
+      console.log('🔍 准备解析的 JSON (前500字符):', jsonStr.substring(0, 500))
+      
+      const result = JSON.parse(jsonStr)
+      console.log('✅ JSON 解析成功')
+      
+      // 验证结果格式
+      if (result.nodes && Array.isArray(result.nodes)) {
+        console.log(`📊 找到 ${result.nodes.length} 个大纲节点`)
+        
+        // 发送大纲数据
+        ctx.res.write(`data: ${JSON.stringify({
+          type: 'outline',
+          data: { outline: result }
+        })}\n\n`)
+        
+        console.log('✅ 已发送大纲数据')
+      } else {
+        console.warn('⚠️ JSON 格式不正确，缺少 nodes 数组')
+        console.log('解析结果:', JSON.stringify(result, null, 2))
+        throw new Error('大纲格式不正确，缺少 nodes 数组')
+      }
+    } catch (parseError) {
+      console.error('❌ 解析大纲 JSON 失败:', parseError)
+      console.error('累积内容长度:', accumulatedContent.length)
+      
+      // 提取错误位置信息
+      let errorDetails = '解析失败'
+      if (parseError instanceof SyntaxError) {
+        const match = parseError.message.match(/position (\d+)/)
+        if (match) {
+          const pos = parseInt(match[1])
+          const start = Math.max(0, pos - 50)
+          const end = Math.min(accumulatedContent.length, pos + 50)
+          errorDetails = `错误位置: "${accumulatedContent.substring(start, end)}"`
+          console.error('错误位置上下文:', accumulatedContent.substring(start, end))
+        }
+      }
+      
+      throw new Error(`解析大纲失败。${errorDetails}。请重试。`)
+    }
+
+    if (!hasError) {
+      ctx.res.write(`data: ${JSON.stringify({ type: 'done', data: {} })}\n\n`)
+    }
+  } catch (error: any) {
+    hasError = true
+    console.error('生成大纲错误:', error)
+    const errorMessage = error.message || '生成大纲失败，请重试'
+    ctx.res.write(`data: ${JSON.stringify({ 
+      type: 'error', 
+      data: { error: errorMessage } 
+    })}\n\n`)
+  } finally {
+    ctx.res.end()
+  }
+})
+
+/**
+ * POST /api/ai/generate-from-outline
+ * 基于大纲生成文档
+ */
+router.post('/generate-from-outline', async (ctx) => {
+  // 验证 AI 配置
+  if (!validateAIConfig()) {
+    ctx.status = 503
+    ctx.body = {
+      success: false,
+      message: 'AI 服务未配置',
+    }
+    return
+  }
+
+  const { documentId, outline, originalPrompt, model = 'deepseek-chat' } = ctx.request.body as {
+    documentId: number
+    outline: any[]
+    originalPrompt: string
+    model?: string
+  }
+
+  // 验证参数
+  if (!documentId || !outline || !Array.isArray(outline)) {
+    ctx.status = 400
+    ctx.body = { error: '缺少必要参数' }
+    return
+  }
+
+  // 将大纲转换为可读格式
+  function formatOutlineToText(nodes: any[], level = 0): string {
+    let text = ''
+    for (const node of nodes) {
+      const indent = '  '.repeat(level)
+      text += `${indent}${level + 1}. ${node.title}\n`
+      if (node.description) {
+        text += `${indent}   ${node.description}\n`
+      }
+      if (node.children && node.children.length > 0) {
+        text += formatOutlineToText(node.children, level + 1)
+      }
+    }
+    return text
+  }
+
+  const outlineText = formatOutlineToText(outline)
+
+  // 构建 Prompt
+  const systemPrompt = `你是一个专业的文档写作助手。
+根据提供的大纲，生成完整的文档内容。
+
+要求：
+1. 严格按照大纲结构生成
+2. 每个章节内容要充实
+3. 使用 Markdown 格式
+4. 保持专业和准确
+5. 使用合适的标题级别（# 为一级标题，## 为二级标题，以此类推）`
+
+  const userPrompt = `原始需求：${originalPrompt || '无'}
+
+请根据以下大纲生成完整文档：
+
+${outlineText}
+
+请生成完整的 Markdown 格式文档内容。`
+
+  // 设置 SSE 响应头
+  ctx.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+
+  ctx.status = 200
+
+  let hasError = false
+
+  try {
+    // 调用 AI 服务
+    const stream = streamChat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      model,
+    })
+
+    for await (const chunk of stream) {
+      const parsed = JSON.parse(chunk)
+      
+      // 只转发内容，不转发思考过程
+      if (parsed.type === 'content') {
+        ctx.res.write(`data: ${JSON.stringify({
+          type: 'content',
+          data: { content: parsed.content }
+        })}\n\n`)
+      }
+    }
+
+    if (!hasError) {
+      ctx.res.write(`data: ${JSON.stringify({ type: 'done', data: {} })}\n\n`)
+    }
+  } catch (error: any) {
+    hasError = true
+    console.error('生成文档错误:', error)
+    const errorMessage = error.message || '生成文档失败，请重试'
+    ctx.res.write(`data: ${JSON.stringify({ 
+      type: 'error', 
+      data: { error: errorMessage } 
+    })}\n\n`)
+  } finally {
+    ctx.res.end()
+  }
+})
+
 export default router

@@ -8,10 +8,13 @@ import type { Editor } from '@tiptap/react'
 import { marked } from 'marked'
 import { streamChatAPI, executeAIEdit } from '../../api/ai'
 import { useChatHistory } from '../../hooks/useChatHistory'
+import { useOutline } from '../../hooks/useOutline'
 import { calculateTotalTokens, estimateCost, formatTokens, formatCost } from '../../utils/tokenCounter'
 import { saveModelPreference, loadModelPreference, loadGlobalModelPreference, getModelInfo, AVAILABLE_MODELS } from '../../utils/modelPreferences'
 import type { Message } from '../../types/message'
 import type { AIEditResponse } from '../../types/suggestion'
+import type { GenerationMode } from '../../types/outline'
+import OutlineView from './OutlineView'
 
 // 配置 marked 选项
 marked.setOptions({
@@ -54,8 +57,25 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
   // 使用对话历史 Hook
   const { messages, addMessage, updateLastMessage, clearHistory } = useChatHistory(documentId)
   
+  // 使用大纲 Hook
+  const {
+    outline,
+    error: outlineError,
+    generateOutline,
+    updateNode,
+    addSibling,
+    addChild,
+    deleteNode,
+    moveNode,
+    toggleCollapse,
+    clearOutline,
+  } = useOutline()
+  
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
+  
+  // 生成模式状态
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('full')
   
   // 从 localStorage 加载模型偏好
   const [model, setModel] = useState<string>(() => {
@@ -97,6 +117,69 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
     addMessage(userMessage)  // 使用 Hook 添加消息
     const userInput = input.trim()
     setInput('')
+    
+    // 根据深度思考开关选择模型
+    let selectedModel = model
+    if (enableDeepThink) {
+      // 如果启用深度思考，使用对应的思考模型
+      if (model.startsWith('deepseek-')) {
+        selectedModel = 'deepseek-reasoner'
+      }
+      // 注意：Kimi 标准 API (moonshot-v1-*) 不支持思考过程输出
+      // 深度思考对 Kimi 无效，保持原模型
+    }
+    
+    // 如果是大纲模式，生成大纲
+    if (generationMode === 'outline') {
+      setIsThinking(true)
+      
+      // 创建 AI 消息占位符
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '',
+        reasoning: '',
+        timestamp: Date.now(),
+        isStreaming: true,
+        isGeneratingToEditor: false,
+      }
+      addMessage(aiMessage)
+      
+      try {
+        // 生成大纲，传递思考过程回调
+        console.log('🎯 开始生成大纲')
+        console.log('  - 选择的模型:', selectedModel)
+        console.log('  - 深度思考开关:', enableDeepThink)
+        
+        await generateOutline(userInput, documentId, selectedModel, (thinking: string) => {
+          // 更新思考过程
+          console.log('💭 收到思考内容（前50字符）:', thinking.substring(0, 50))
+          updateLastMessage(msg => ({
+            ...msg,
+            reasoning: (msg.reasoning || '') + thinking
+          }))
+        })
+        
+        // 生成完成，更新消息
+        updateLastMessage(msg => ({
+          ...msg,
+          content: '大纲已生成，请在右侧编辑后点击"基于大纲生成文档"按钮。',
+          isStreaming: false
+        }))
+      } catch (error) {
+        console.error('生成大纲失败:', error)
+        updateLastMessage(msg => ({
+          ...msg,
+          content: '抱歉，生成大纲时出错了。请重试。',
+          isStreaming: false
+        }))
+      } finally {
+        setIsThinking(false)
+      }
+      
+      return
+    }
+    
     setIsThinking(true)
     setIsGenerating(true)
     setHasStartedGenerating(false)
@@ -114,17 +197,6 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
       userInput.includes('把') ||
       userInput.includes('将')
     )
-
-    // 根据深度思考开关选择模型
-    let selectedModel = model
-    if (enableDeepThink) {
-      // 如果启用深度思考，使用对应的思考模型
-      if (model.startsWith('deepseek-')) {
-        selectedModel = 'deepseek-reasoner'
-      }
-      // 注意：Kimi 标准 API (moonshot-v1-*) 不支持思考过程输出
-      // 深度思考对 Kimi 无效，保持原模型
-    }
 
     if (isEditMode) {
       // 编辑模式：调用 AI 编辑 API
@@ -385,6 +457,91 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
     }
   }
 
+  // 基于大纲生成文档
+  const handleGenerateFromOutline = async () => {
+    if (!outline || !editor) return
+
+    setIsGenerating(true)
+    setIsThinking(true)
+    
+    // 通知父组件开始流式输出
+    onStreamingChange?.(true)
+
+    try {
+      const response = await fetch('/api/ai/generate-from-outline', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          documentId,
+          outline: outline.nodes,
+          originalPrompt: messages.find(m => m.role === 'user')?.content || '',
+          model,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      let buffer = ''
+      let accumulatedContent = ''
+
+      // 清空编辑器
+      editor.commands.clearContent()
+
+      while (true) {
+        const { done, value } = await reader.read()
+
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6))
+
+            if (data.type === 'content') {
+              accumulatedContent += data.data.content || ''
+              updateEditorContent(editor, accumulatedContent)
+              setGeneratedContent(accumulatedContent)
+            } else if (data.type === 'error') {
+              throw new Error(data.data.error || 'Unknown error')
+            }
+          }
+        }
+      }
+
+      // 生成完成，清除大纲
+      clearOutline()
+      setIsThinking(false)
+      setIsGenerating(false)
+      
+      // 通知父组件流式输出结束
+      onStreamingChange?.(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to generate document'
+      console.error('Document generation error:', err)
+      setIsThinking(false)
+      setIsGenerating(false)
+      
+      // 通知父组件流式输出结束
+      onStreamingChange?.(false)
+      
+      alert(`生成文档失败: ${message}`)
+    }
+  }
+
   // 按 Enter 发送
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -409,6 +566,37 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* 生成模式切换 */}
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => {
+                setGenerationMode('full')
+                clearOutline()
+              }}
+              disabled={isThinking || isGenerating}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                generationMode === 'full'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              } disabled:opacity-50`}
+              title="全文生成模式"
+            >
+              全文生成
+            </button>
+            <button
+              onClick={() => setGenerationMode('outline')}
+              disabled={isThinking || isGenerating}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                generationMode === 'outline'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              } disabled:opacity-50`}
+              title="大纲生成模式"
+            >
+              分段生成
+            </button>
+          </div>
+          
           {/* Token 统计按钮 */}
           <button
             onClick={() => setShowTokenStats(!showTokenStats)}
@@ -563,13 +751,31 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
         
         {/* 消息列表 */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 ? (
+          {/* 如果有大纲，显示大纲视图 */}
+          {outline ? (
+            <OutlineView
+              outline={outline}
+              onUpdate={updateNode}
+              onAddSibling={addSibling}
+              onAddChild={addChild}
+              onDelete={deleteNode}
+              onMove={moveNode}
+              onToggleCollapse={toggleCollapse}
+              onGenerateDocument={handleGenerateFromOutline}
+              isGenerating={isGenerating}
+              error={outlineError}
+            />
+          ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <svg className="h-16 w-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
               </svg>
               <p className="text-sm text-gray-500">您好，有什么可以帮您？</p>
-              <p className="text-xs text-gray-400 mt-2">输入您的需求，AI 将帮助您创作内容</p>
+              <p className="text-xs text-gray-400 mt-2">
+                {generationMode === 'outline' 
+                  ? '输入您的需求，AI 将生成文档大纲供您编辑'
+                  : '输入您的需求，AI 将帮助您创作内容'}
+              </p>
             </div>
           ) : (
             <>

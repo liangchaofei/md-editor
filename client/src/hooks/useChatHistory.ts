@@ -17,8 +17,21 @@ export function useChatHistory(documentId: number) {
     try {
       const stored = localStorage.getItem(storageKey)
       if (stored) {
-        const parsed = JSON.parse(stored)
-        setMessages(parsed)
+        const parsed = JSON.parse(stored) as Message[]
+        // 清理未完成的流式状态
+        const cleaned = parsed.map(msg => {
+          if (msg.isStreaming) {
+            // 如果消息还在流式状态，标记为已完成
+            return {
+              ...msg,
+              isStreaming: false,
+              isGeneratingToEditor: false,
+              content: msg.content || '（生成被中断）'
+            }
+          }
+          return msg
+        })
+        setMessages(cleaned)
       } else {
         setMessages([])
       }
