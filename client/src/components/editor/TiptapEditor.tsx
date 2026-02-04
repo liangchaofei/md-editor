@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
+import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
@@ -18,14 +19,13 @@ import { TaskItem } from '@tiptap/extension-task-item'
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight'
 import { Markdown } from 'tiptap-markdown'
 import { Dropcursor } from '@tiptap/extension-dropcursor'
+import { DragHandle } from '@tiptap/extension-drag-handle'
 import { CustomCollaborationCursor } from '../../extensions/CustomCollaborationCursor'
 import { CustomKeymap } from '../../extensions/CustomKeymap'
 import { SlashCommands, slashCommandSuggestion } from '../../extensions/SlashCommands'
 import { Highlight } from '../../extensions/Highlight'
 import { Suggestion } from '../../extensions/Suggestion'
-import { DragAndDrop } from '../../extensions/DragAndDrop'
 import { lowlight } from '../../utils/lowlight'
-import BubbleMenuComponent from './BubbleMenu'
 import MenuBar from './MenuBar'
 import EditorStatusBar from './EditorStatusBar'
 import ConnectionStatus from './ConnectionStatus'
@@ -40,7 +40,6 @@ import AICommandDialog from './AICommandDialog'
 import ResizableHandle from './ResizableHandle'
 import SuggestionTooltip from './SuggestionTooltip'
 import ContextMenu from './ContextMenu'
-import DragHandle from './DragHandle'
 import { createYDoc, createHocuspocusProvider } from '../../utils/yjs'
 import { useCollaborationStatus } from '../../hooks/useCollaborationStatus'
 import { useSuggestions } from '../../hooks/useSuggestions'
@@ -77,6 +76,9 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPromp
   
   // AI 流式输出状态
   const [isAIStreaming, setIsAIStreaming] = useState(false)
+  
+  // 拖拽功能开关（默认关闭）
+  const [isDragEnabled, setIsDragEnabled] = useState(false)
   
   // 处理拖拽调整宽度
   const handleResize = useCallback((deltaX: number) => {
@@ -181,8 +183,27 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPromp
         color: '#3b82f6',
         width: 2,
       }),
-      // 拖拽排序
-      DragAndDrop,
+      // 官方拖拽手柄（条件性加载）
+      ...(isDragEnabled ? [
+        DragHandle.configure({
+          render: () => {
+            const div = window.document.createElement('div')
+            div.className = 'drag-handle'
+            div.innerHTML = `
+              <svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="3" cy="3" r="1.5" />
+                <circle cx="3" cy="8" r="1.5" />
+                <circle cx="3" cy="13" r="1.5" />
+                <circle cx="8" cy="3" r="1.5" />
+                <circle cx="8" cy="8" r="1.5" />
+                <circle cx="8" cy="13" r="1.5" />
+              </svg>
+            `
+            console.log('🎯 创建拖拽手柄:', div)
+            return div
+          },
+        })
+      ] : []),
       Placeholder.configure({
         placeholder: '开始输入内容... 输入 / 查看命令',
       }),
@@ -198,7 +219,7 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPromp
       const html = editor.getHTML()
       onUpdate(html)
     },
-  }, [document.id, ydoc, provider]) // 添加 provider 到依赖
+  }, [document.id, ydoc, provider, isDragEnabled]) // 添加 isDragEnabled 到依赖
   
   // 监听 provider 同步完成后，如果内容为空则从服务器加载
   useEffect(() => {
@@ -355,6 +376,22 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPromp
             
             {/* 右侧：按钮组 */}
             <div className="flex items-center gap-2 flex-wrap">
+              {/* 拖拽功能开关 */}
+              <button
+                onClick={() => setIsDragEnabled(!isDragEnabled)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border transition-colors ${
+                  isDragEnabled
+                    ? 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+                title={isDragEnabled ? '关闭拖拽' : '开启拖拽'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+                <span className="hidden sm:inline">拖拽</span>
+              </button>
+              
               {/* AI 助手按钮 */}
               <button
                 onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}
@@ -404,19 +441,43 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPromp
         {/* 表格操作菜单 */}
         <TableMenu editor={editor} />
 
-        {/* 浮动工具栏 */}
-        <BubbleMenuComponent 
-          editor={editor} 
-          onAICommand={openAICommand}
-          isDialogOpen={isAICommandDialogOpen}
-        />
+        {/* 浮动工具栏 - 使用 Tiptap 官方 BubbleMenu */}
+        <BubbleMenu
+          editor={editor}
+          tippyOptions={{
+            duration: 100,
+            placement: 'top',
+          }}
+          shouldShow={({ editor, state }) => {
+            // 如果对话框打开，不显示菜单
+            if (isAICommandDialogOpen) return false
+            
+            // 检查是否有文本选中
+            const { from, to } = state.selection
+            return from !== to
+          }}
+        >
+          <div className="flex flex-col bg-white rounded-lg border border-gray-200 shadow-xl py-1 min-w-[120px]">
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                openAICommand('rewrite')
+              }}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left cursor-pointer w-full"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              改写
+            </button>
+          </div>
+        </BubbleMenu>
 
         {/* 编辑器内容 - 占据剩余空间 */}
         <div className="flex-1 overflow-auto relative">
           <EditorContent editor={editor} />
-          
-          {/* 拖拽手柄 */}
-          <DragHandle editor={editor} />
         </div>
 
         {/* 状态栏 - 固定高度 */}

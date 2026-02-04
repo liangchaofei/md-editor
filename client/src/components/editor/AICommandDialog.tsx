@@ -183,6 +183,31 @@ function AICommandDialog({ editor, type, isOpen, onClose }: AICommandDialogProps
     setIsThinking(false)
   }
 
+  // 点击外部关闭对话框（仅在初始状态）
+  useEffect(() => {
+    if (!isOpen || generatedContent || isThinking || isGenerating) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      // 检查点击是否在对话框内部（包括输入框和快捷菜单）
+      const isInsideDialog = target.closest('.ai-command-dialog')
+      
+      if (!isInsideDialog) {
+        handleCancel()
+      }
+    }
+
+    // 延迟添加监听器，避免立即触发
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside)
+    }, 100)
+
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen, generatedContent, isThinking, isGenerating])
+
   // 重置状态并自动执行续写
   useEffect(() => {
     if (isOpen) {
@@ -213,13 +238,31 @@ function AICommandDialog({ editor, type, isOpen, onClose }: AICommandDialogProps
       const start = editor.view.coordsAtPos(from)
       const end = editor.view.coordsAtPos(to)
       
-      // 计算选中文本的中心位置
-      const left = (start.left + end.left) / 2
-      const top = end.bottom + 10 // 在选中文本下方 10px
+      // 计算选中文本的中心位置（水平）
+      const centerX = (start.left + end.left) / 2
+      
+      // 对话框宽度
+      const dialogWidth = generatedContent || isThinking || isGenerating ? 672 : 600 // max-w-2xl = 672px, 输入框 = 600px
+      const halfWidth = dialogWidth / 2
+      
+      // 确保对话框不超出视口左边界
+      let left = centerX
+      if (left - halfWidth < 20) {
+        left = halfWidth + 20
+      }
+      
+      // 确保对话框不超出视口右边界
+      const viewportWidth = window.innerWidth
+      if (left + halfWidth > viewportWidth - 20) {
+        left = viewportWidth - halfWidth - 20
+      }
+      
+      // 始终显示在选中文本下方
+      const top = end.bottom + 10
       
       setPosition({ top, left })
     }
-  }, [isOpen, editor])
+  }, [isOpen, editor, generatedContent, isThinking, isGenerating])
 
   if (!isOpen || !position) return null
 
@@ -341,11 +384,12 @@ function AICommandDialog({ editor, type, isOpen, onClose }: AICommandDialogProps
     <>
       {/* 输入框 */}
       <div 
-        className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 p-3"
+        className="ai-command-dialog fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 p-3"
         style={{
           top: `${position.top}px`,
           left: `${position.left}px`,
           width: '600px',
+          transform: 'translateX(-50%)',
         }}
       >
         <div className="flex items-center gap-2">
@@ -355,6 +399,7 @@ function AICommandDialog({ editor, type, isOpen, onClose }: AICommandDialogProps
             onChange={(e) => setInput(e.target.value)}
             placeholder="说说想怎么修改当前内容？"
             className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            autoFocus
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
@@ -453,12 +498,16 @@ function QuickMenu({ position, onSelect }: QuickMenuProps) {
     },
   ]
 
+  // 计算快捷菜单的左边距，使其与输入框左对齐
+  // 输入框宽度 600px，居中后左边距为 position.left - 300
+  const menuLeft = position.left - 300
+
   return (
     <div 
-      className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-2"
+      className="ai-command-dialog fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-2"
       style={{
         top: `${position.top + 60}px`,
-        left: `${position.left}px`,  // 左对齐，不居中
+        left: `${menuLeft}px`,
         width: '200px',
       }}
     >

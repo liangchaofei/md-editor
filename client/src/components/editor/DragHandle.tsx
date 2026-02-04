@@ -1,6 +1,6 @@
 /**
  * DragHandle 组件
- * 块级编辑的拖拽手柄
+ * 简化版本，更稳定可靠
  */
 
 import { useEffect, useState, useRef } from 'react'
@@ -13,7 +13,7 @@ interface DragHandleProps {
 function DragHandle({ editor }: DragHandleProps) {
   const [isVisible, setIsVisible] = useState(false)
   const [position, setPosition] = useState({ top: 0, left: 0 })
-  const [currentNode, setCurrentNode] = useState<any>(null)
+  const [currentPos, setCurrentPos] = useState<number | null>(null)
   const handleRef = useRef<HTMLDivElement>(null)
   const [showMenu, setShowMenu] = useState(false)
 
@@ -35,9 +35,9 @@ function DragHandle({ editor }: DragHandleProps) {
         left: rect.left - 28,
       })
 
+      // 获取节点位置
       const pos = editor.view.posAtDOM(blockElement as Node, 0)
-      const node = editor.state.doc.nodeAt(pos)
-      setCurrentNode({ pos, node })
+      setCurrentPos(pos)
       setIsVisible(true)
       currentBlock = blockElement
     }
@@ -50,10 +50,23 @@ function DragHandle({ editor }: DragHandleProps) {
         return
       }
 
-      // 查找块级元素
-      const blockElement = target.closest('p, h1, h2, h3, h4, h5, h6, li, pre, blockquote, .tableWrapper')
+      // 首先尝试查找块级元素（不包括 li）
+      let blockElement = target.closest('p, h1, h2, h3, h4, h5, h6, pre, blockquote, .tableWrapper') as Element | null
+      
+      // 如果没找到块级元素，检查是否在列表中
+      if (!blockElement) {
+        // 查找最近的列表容器（ul 或 ol）
+        const listContainer = target.closest('ul, ol') as Element | null
+        if (listContainer && editorElement.contains(listContainer)) {
+          blockElement = listContainer
+        }
+      }
       
       if (blockElement && editorElement.contains(blockElement)) {
+        // 避免在同一个块上重复更新
+        if (currentBlock === blockElement) {
+          return
+        }
         updateHandle(blockElement)
       } else if (currentBlock) {
         // 检查是否在当前块的左侧区域
@@ -77,21 +90,27 @@ function DragHandle({ editor }: DragHandleProps) {
   }, [editor])
 
   const handleDragStart = (e: React.DragEvent) => {
-    if (!editor || !currentNode) return
+    if (!editor || currentPos === null) return
 
     e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', currentNode.pos.toString())
+    e.dataTransfer.setData('text/plain', currentPos.toString())
 
+    // 自定义拖拽预览
     const dragImage = document.createElement('div')
     dragImage.textContent = '⋮⋮'
-    dragImage.style.cssText = 'position: absolute; top: -1000px; padding: 4px 8px; background: #3b82f6; color: white; border-radius: 4px;'
+    dragImage.style.cssText = 'position: absolute; top: -1000px; padding: 4px 8px; background: #3b82f6; color: white; border-radius: 4px; font-size: 14px;'
     document.body.appendChild(dragImage)
     e.dataTransfer.setDragImage(dragImage, 0, 0)
     setTimeout(() => document.body.removeChild(dragImage), 0)
 
-    const { pos, node } = currentNode
+    // 选中被拖拽的节点
+    const $pos = editor.state.doc.resolve(currentPos)
+    const node = $pos.nodeAfter
     if (node) {
-      editor.commands.setTextSelection({ from: pos, to: pos + node.nodeSize })
+      editor.commands.setTextSelection({ 
+        from: currentPos, 
+        to: currentPos + node.nodeSize 
+      })
     }
   }
 
@@ -100,32 +119,44 @@ function DragHandle({ editor }: DragHandleProps) {
   }
 
   const handleClick = () => {
-    if (!editor || !currentNode) return
+    if (!editor || currentPos === null) return
 
-    const { pos, node } = currentNode
+    const $pos = editor.state.doc.resolve(currentPos)
+    const node = $pos.nodeAfter
     if (node) {
-      editor.commands.setTextSelection({ from: pos, to: pos + node.nodeSize })
+      editor.commands.setTextSelection({ 
+        from: currentPos, 
+        to: currentPos + node.nodeSize 
+      })
     }
     setShowMenu(true)
   }
 
   const handleDelete = () => {
-    if (!editor || !currentNode) return
+    if (!editor || currentPos === null) return
 
-    const { pos, node } = currentNode
+    const $pos = editor.state.doc.resolve(currentPos)
+    const node = $pos.nodeAfter
     if (node) {
-      editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run()
+      editor.chain()
+        .focus()
+        .deleteRange({ from: currentPos, to: currentPos + node.nodeSize })
+        .run()
     }
     setShowMenu(false)
     setIsVisible(false)
   }
 
   const handleDuplicate = () => {
-    if (!editor || !currentNode) return
+    if (!editor || currentPos === null) return
 
-    const { pos, node } = currentNode
+    const $pos = editor.state.doc.resolve(currentPos)
+    const node = $pos.nodeAfter
     if (node) {
-      editor.chain().focus().insertContentAt(pos + node.nodeSize, node.toJSON()).run()
+      editor.chain()
+        .focus()
+        .insertContentAt(currentPos + node.nodeSize, node.toJSON())
+        .run()
     }
     setShowMenu(false)
   }

@@ -475,3 +475,58 @@
 .ProseMirror .suggestion-mark:hover {
   background-color: #bfdbfe;
 }
+
+/* 拖拽手柄样式 - Tiptap 官方 */
+.drag-handle {
+  position: absolute;
+  left: -2rem;
+  top: 0.25rem;
+  opacity: 0;
+  transition: all 0.2s ease;
+  cursor: grab;
+  padding: 0.375rem;
+  border-radius: 0.375rem;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.drag-handle:hover {
+  opacity: 1 !important;
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.15);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+  background-color: #e5e7eb;
+  transform: scale(0.95);
+}
+
+.drag-handle svg {
+  width: 1rem;
+  height: 1rem;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+/* 悬停时显示 - 更明显 */
+.ProseMirror > *:hover > .drag-handle {
+  opacity: 0.6;
+}
+
+.ProseMirror > * > .drag-handle:hover {
+  opacity: 1;
+}
+
+/* 确保块级元素有相对定位 */
+.ProseMirror > * {
+  position: relative;
+}
