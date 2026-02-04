@@ -825,7 +825,7 @@ router.post('/generate-from-outline', async (ctx) => {
   const systemPrompt = `你是一个专业的文档写作助手。
 根据提供的大纲，生成完整的文档内容。
 
-【重要】直接输出 Markdown 格式的文档内容，不要使用代码块（```）包裹。
+【重要】直接输出 Markdown 格式的文档内容，不要使用代码块包裹。
 
 要求：
 1. 严格按照大纲结构生成
@@ -836,7 +836,7 @@ router.post('/generate-from-outline', async (ctx) => {
    - 三级标题使用 ###
    - 列表使用 - 或 1. 2. 3.
    - 加粗使用 **文字**
-4. 不要在开头或结尾添加 \`\`\`markdown 或 \`\`\` 标记
+4. 不要在开头或结尾添加代码块标记
 5. 直接输出文档内容即可`
 
   const userPrompt = `原始需求：${originalPrompt || '无'}

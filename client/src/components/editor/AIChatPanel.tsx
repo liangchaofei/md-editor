@@ -9,8 +9,7 @@ import { marked } from 'marked'
 import { streamChatAPI, executeAIEdit } from '../../api/ai'
 import { useChatHistory } from '../../hooks/useChatHistory'
 import { useOutline } from '../../hooks/useOutline'
-import { calculateTotalTokens, estimateCost, formatTokens, formatCost } from '../../utils/tokenCounter'
-import { saveModelPreference, loadModelPreference, loadGlobalModelPreference, getModelInfo, AVAILABLE_MODELS } from '../../utils/modelPreferences'
+import { saveModelPreference, loadModelPreference, loadGlobalModelPreference, getModelInfo, AVAILABLE_MODELS, supportsDeepThink } from '../../utils/modelPreferences'
 import type { Message } from '../../types/message'
 import type { AIEditResponse } from '../../types/suggestion'
 import type { GenerationMode } from '../../types/outline'
@@ -51,9 +50,22 @@ interface AIChatPanelProps {
   documentId: number  // 新增：文档 ID
   onSuggestionsReceived?: (suggestions: AIEditResponse, isStreaming?: boolean) => { suggestionId?: string } | void
   onStreamingChange?: (isStreaming: boolean) => void
+  initialPrompt?: string
+  initialGenerationMode?: 'full' | 'outline'
+  initialEnableDeepThink?: boolean
 }
 
-function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceived, onStreamingChange }: AIChatPanelProps) {
+function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceived, onStreamingChange, initialPrompt, initialGenerationMode, initialEnableDeepThink }: AIChatPanelProps) {
+  // 调试日志
+  console.log('💬 AIChatPanel 接收到的参数:', {
+    initialPrompt,
+    initialGenerationMode,
+    initialEnableDeepThink,
+    documentId,
+    isOpen,
+    editor: !!editor
+  })
+  
   // 使用对话历史 Hook
   const { messages, addMessage, updateLastMessage, clearHistory } = useChatHistory(documentId)
   
@@ -71,11 +83,17 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
     clearOutline,
   } = useOutline()
   
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(initialPrompt || '')
   const [isThinking, setIsThinking] = useState(false)
   
   // 生成模式状态
-  const [generationMode, setGenerationMode] = useState<GenerationMode>('full')
+  const [generationMode, setGenerationMode] = useState<GenerationMode>(initialGenerationMode || 'full')
+  
+  // 深度思考开关（从首页传递的初始值）
+  const [enableDeepThink, setEnableDeepThink] = useState(initialEnableDeepThink || false)
+  
+  // 保存已处理的 prompt 标识（documentId + prompt），避免重复触发
+  const processedKeyRef = useRef<string | null>(null)
   
   // 从 localStorage 加载模型偏好
   const [model, setModel] = useState<string>(() => {
@@ -87,11 +105,9 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
     saveModelPreference(documentId, model)
   }, [documentId, model])
   
-  const [enableDeepThink, setEnableDeepThink] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedContent, setGeneratedContent] = useState('')
   const [hasStartedGenerating, setHasStartedGenerating] = useState(false)
-  const [showTokenStats, setShowTokenStats] = useState(false)  // 新增：显示 Token 统计
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 自动滚动到底部
@@ -105,7 +121,19 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
 
   // 发送消息
   const handleSend = async () => {
-    if (!input.trim() || isThinking || !editor) return
+    console.log('📤 handleSend 被调用，检查条件:', {
+      input: input,
+      inputTrimmed: input.trim(),
+      isThinking,
+      editor: !!editor
+    })
+    
+    if (!input.trim() || isThinking || !editor) {
+      console.warn('⚠️ handleSend 条件不满足，返回')
+      return
+    }
+
+    console.log('✅ handleSend 条件满足，开始发送消息')
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -117,6 +145,9 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
     addMessage(userMessage)  // 使用 Hook 添加消息
     const userInput = input.trim()
     setInput('')
+    
+    // 记录开始时间用于统计
+    const startTime = Date.now()
     
     // 根据深度思考开关选择模型
     let selectedModel = model
@@ -160,11 +191,21 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
           }))
         })
         
+        // 计算统计信息
+        const duration = (Date.now() - startTime) / 1000
+        const tokens = Math.ceil((userInput.length + 500) / 2) // 粗略估算
+        const cost = tokens * 0.000001 // 粗略估算费用
+        
         // 生成完成，更新消息
         updateLastMessage(msg => ({
           ...msg,
           content: '大纲已生成，请在右侧编辑后点击"基于大纲生成文档"按钮。',
-          isStreaming: false
+          isStreaming: false,
+          stats: {
+            duration,
+            tokens,
+            cost
+          }
         }))
       } catch (error) {
         console.error('生成大纲失败:', error)
@@ -268,11 +309,21 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
           console.log('📄 当前文档内容（前500字符）:')
           console.log(editor?.getText().substring(0, 500))
           
+          // 计算统计信息
+          const duration = (Date.now() - startTime) / 1000
+          const tokens = Math.ceil((plainTextContent.length + userInput.length + accumulatedContent.length) / 2)
+          const cost = tokens * 0.000001
+          
           // 更新消息内容
           updateLastMessage(msg => ({
             ...msg,
             content: `根据你的描述，我将为你${data.reasoning || '修改文档'}。\n\n修改建议已在编辑器中标记（删除线 + 绿色高亮），请 hover 查看并选择接受或拒绝。`,
-            isStreaming: false
+            isStreaming: false,
+            stats: {
+              duration,
+              tokens,
+              cost
+            }
           }))
           
           // 通知父组件处理建议（暂时不使用流式模式）
@@ -405,11 +456,21 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
           // 通知父组件流式输出结束
           onStreamingChange?.(false)
           
+          // 计算统计信息
+          const duration = (Date.now() - startTime) / 1000
+          const tokens = Math.ceil((userInput.length + accumulatedContent.length) / 2)
+          const cost = tokens * 0.000001
+          
           updateLastMessage(msg => ({
             ...msg,
             isStreaming: false,
             isGeneratingToEditor: false,
-            content: accumulatedContent
+            content: accumulatedContent,
+            stats: {
+              duration,
+              tokens,
+              cost
+            }
           }))
         },
         onError: (error) => {
@@ -570,205 +631,161 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
     }
   }
 
+  // 自动触发初始提示词（只触发一次）
+  // 使用独立的 useEffect，只在 initialPrompt 或 documentId 变化时执行
+  useEffect(() => {
+    // 如果没有 initialPrompt，直接返回
+    if (!initialPrompt) {
+      console.log('🔍 没有 initialPrompt，跳过自动触发')
+      return
+    }
+    
+    // 生成唯一标识
+    const currentKey = `${documentId}-${initialPrompt}`
+    
+    console.log('🔍 自动触发检查:', {
+      currentKey,
+      processedKey: processedKeyRef.current,
+      shouldTrigger: processedKeyRef.current !== currentKey
+    })
+    
+    // 如果这个 key 已经处理过，直接返回
+    if (processedKeyRef.current === currentKey) {
+      console.log('❌ 该 key 已处理过，跳过')
+      return
+    }
+    
+    // 标记为已处理
+    processedKeyRef.current = currentKey
+    console.log('✅ 标记 key 为已处理:', currentKey)
+    
+    // 等待编辑器初始化后触发
+    const checkAndTrigger = () => {
+      console.log('⏰ 检查触发条件:', {
+        editor: !!editor,
+        isOpen,
+        input: !!input
+      })
+      
+      if (editor && isOpen && input) {
+        console.log('🚀 执行自动发送')
+        handleSend()
+      } else {
+        console.log('⏳ 条件未满足，500ms 后重试')
+        setTimeout(checkAndTrigger, 500)
+      }
+    }
+    
+    // 延迟执行，确保编辑器已初始化
+    const timer = setTimeout(checkAndTrigger, 300)
+    
+    return () => clearTimeout(timer)
+  }, [initialPrompt, documentId]) // 只依赖这两个，不依赖其他状态
+
   if (!isOpen) return null
 
   return (
     <div className="flex h-full flex-col border-l border-gray-200 bg-white">
-      {/* 头部 */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <svg className="h-5 w-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-          </svg>
-          <h2 className="text-sm font-semibold text-gray-900">AI 写作助手</h2>
-          {isThinking && (
-            <span className="text-xs text-purple-600">正在思考中...</span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {/* 生成模式切换 */}
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => {
-                setGenerationMode('full')
-                clearOutline()
-              }}
-              disabled={isThinking || isGenerating}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                generationMode === 'full'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              } disabled:opacity-50`}
-              title="全文生成模式"
-            >
-              全文生成
-            </button>
-            <button
-              onClick={() => setGenerationMode('outline')}
-              disabled={isThinking || isGenerating}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                generationMode === 'outline'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              } disabled:opacity-50`}
-              title="大纲生成模式"
-            >
-              分段生成
-            </button>
-          </div>
-          
-          {/* Token 统计按钮 */}
-          <button
-            onClick={() => setShowTokenStats(!showTokenStats)}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-            title="Token 统计"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </button>
-          
-          {/* 清空历史按钮 */}
-          {messages.length > 0 && (
-            <button
-              onClick={() => {
-                if (confirm('确定要清空对话历史吗？')) {
-                  clearHistory()
-                  setGeneratedContent('')
-                }
-              }}
-              className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              title="清空对话历史"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
-          )}
-          
-          {/* 调试按钮 */}
+      {/* 头部 - 简化版 */}
+      <div className="flex items-center justify-end gap-2 border-b border-gray-200 px-4 py-2">
+        {/* 清空历史按钮 */}
+        {messages.length > 0 && (
           <button
             onClick={() => {
-              if (!editor) return
-              const plainText = editor.getText()
-              console.group('🔍 AI 对话调试信息')
-              console.log('📝 纯文本内容（前500字符）:')
-              console.log(plainText.substring(0, 500))
-              console.log('\n📊 统计:')
-              console.log('纯文本长度:', plainText.length)
-              console.groupEnd()
-              alert('调试信息已打印到控制台（F12）')
+              if (confirm('确定要清空对话历史吗？')) {
+                clearHistory()
+                setGeneratedContent('')
+                clearOutline()
+              }
             }}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-            title="打印调试信息到控制台"
+            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            title="清空对话历史"
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
-          
-          {/* 模型选择 */}
-          <div className="relative group">
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              disabled={isThinking}
-              className="appearance-none text-xs border border-gray-300 rounded-md pl-3 pr-8 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
-              title="选择 AI 模型"
-            >
-              {AVAILABLE_MODELS.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-            
-            {/* 模型信息提示 */}
-            <div className="hidden group-hover:block absolute right-0 top-full mt-2 w-64 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-              {(() => {
-                const info = getModelInfo(model)
-                if (!info) return null
-                return (
-                  <div className="text-xs space-y-2">
-                    <div>
-                      <div className="font-medium text-gray-900">{info.name}</div>
-                      <div className="text-gray-600 mt-1">{info.description}</div>
-                    </div>
-                    <div className="pt-2 border-t border-gray-200 space-y-1">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">上下文窗口:</span>
-                        <span className="font-medium">{info.contextWindow}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">定价:</span>
-                        <span className="font-medium text-xs">{info.pricing}</span>
-                      </div>
-                    </div>
-                    <div className="pt-2 border-t border-gray-200">
-                      <div className="text-gray-600 mb-1">特性:</div>
-                      <div className="flex flex-wrap gap-1">
-                        {info.features.map(f => (
-                          <span key={f} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded">
-                            {f}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })()}
-            </div>
+        )}
+        
+        {/* 模型选择 */}
+        <div className="relative group">
+          <select
+            value={model}
+            onChange={(e) => {
+              const newModel = e.target.value
+              setModel(newModel)
+              // 如果切换到不支持深度思考的模型，自动关闭深度思考
+              if (!supportsDeepThink(newModel)) {
+                setEnableDeepThink(false)
+              }
+            }}
+            disabled={isThinking}
+            className="appearance-none text-xs border border-gray-300 rounded-md pl-3 pr-8 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500 transition-colors"
+            title="选择 AI 模型"
+          >
+            {AVAILABLE_MODELS.map(m => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
           </div>
           
-          <button
-            onClick={onClose}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-            title="收起 AI 面板"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {/* 模型信息提示 */}
+          <div className="hidden group-hover:block absolute right-0 top-full mt-2 w-64 p-3 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+            {(() => {
+              const info = getModelInfo(model)
+              if (!info) return null
+              return (
+                <div className="text-xs space-y-2">
+                  <div>
+                    <div className="font-medium text-gray-900">{info.name}</div>
+                    <div className="text-gray-600 mt-1">{info.description}</div>
+                  </div>
+                  <div className="pt-2 border-t border-gray-200 space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">上下文窗口:</span>
+                      <span className="font-medium">{info.contextWindow}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">定价:</span>
+                      <span className="font-medium text-xs">{info.pricing}</span>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-gray-200">
+                    <div className="text-gray-600 mb-1">特性:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {info.features.map(f => (
+                        <span key={f} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
         </div>
+        
+        {/* 关闭按钮 */}
+        <button
+          onClick={onClose}
+          className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+          title="收起 AI 面板"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       {/* 内容区域 */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Token 统计面板 */}
-        {showTokenStats && (
-          <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-            <div className="text-xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">总 Token 数:</span>
-                <span className="font-medium text-gray-900">
-                  {formatTokens(calculateTotalTokens(messages))}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">预估费用:</span>
-                <span className="font-medium text-gray-900">
-                  {formatCost(estimateCost(
-                    calculateTotalTokens(messages.filter(m => m.role === 'user')),
-                    calculateTotalTokens(messages.filter(m => m.role === 'assistant')),
-                    model
-                  ))}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">当前模型:</span>
-                <span className="font-medium text-gray-900">
-                  {getModelInfo(model)?.name || model}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-        
         {/* 消息列表 */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* 如果有大纲，显示大纲视图 */}
@@ -861,7 +878,63 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
             </div>
           )}
           
-          <div className="space-y-2">
+          <div className="space-y-3">
+            {/* 模式选择和深度思考 */}
+            <div className="flex items-center gap-2 px-1">
+              {/* 分步生成按钮 */}
+              <button
+                onClick={() => {
+                  if (generationMode === 'outline') {
+                    setGenerationMode('full')
+                    clearOutline()
+                  } else {
+                    setGenerationMode('outline')
+                  }
+                }}
+                disabled={isThinking || isGenerating}
+                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  generationMode === 'outline'
+                    ? 'bg-purple-100 text-purple-700 border border-purple-300'
+                    : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={generationMode === 'outline' ? '已启用分步生成' : '点击启用分步生成'}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+                分步生成
+                {generationMode === 'outline' && (
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+
+              {/* 深度思考开关 - 只在支持的模型下显示 */}
+              {supportsDeepThink(model) && (
+                <button
+                  onClick={() => setEnableDeepThink(!enableDeepThink)}
+                  disabled={isThinking || isGenerating}
+                  className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    enableDeepThink
+                      ? 'bg-purple-100 text-purple-700 border border-purple-300'
+                      : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  title={enableDeepThink ? '已启用深度思考' : '点击启用深度思考'}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  深度思考
+                  {enableDeepThink && (
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </button>
+              )}
+            </div>
+            
             {/* 输入框和发送按钮 */}
             <div className="flex gap-2">
               <textarea
@@ -870,47 +943,16 @@ function AIChatPanel({ isOpen, onClose, editor, documentId, onSuggestionsReceive
                 onKeyDown={handleKeyDown}
                 placeholder="输入您的需求... (Enter 发送，Shift+Enter 换行)"
                 disabled={isThinking}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm resize-none focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:bg-gray-50 disabled:text-gray-500"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm resize-none focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:bg-gray-50 disabled:text-gray-500 transition-colors"
                 rows={3}
               />
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isThinking || !editor}
-                className="self-end rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                className="self-end rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-white hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isThinking ? '思考中...' : '发送'}
               </button>
-            </div>
-            
-            {/* 深度思考开关 */}
-            <div className="flex items-center gap-2 px-1">
-              <button
-                onClick={() => setEnableDeepThink(!enableDeepThink)}
-                disabled={isThinking}
-                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  enableDeepThink
-                    ? 'bg-purple-100 text-purple-700 border border-purple-300'
-                    : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                title={enableDeepThink ? '已启用深度思考' : '点击启用深度思考'}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                <span>深度思考</span>
-                {enableDeepThink && (
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </button>
-              {enableDeepThink && (
-                <span className="text-xs text-gray-500">
-                  {model.startsWith('deepseek-') 
-                    ? '将使用 DeepSeek Reasoner' 
-                    : '⚠️ Kimi 官方 API 暂不支持思考过程'}
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -1020,9 +1062,27 @@ function MessageItem({ message }: { message: Message }) {
               <div className="text-xs text-gray-500 mb-2">
                 创建时间: {new Date(message.timestamp).toLocaleString('zh-CN')}
               </div>
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-gray-600 mb-3">
                 内容已生成到编辑器，共 {message.content.length} 字
               </div>
+              
+              {/* Token 统计信息 */}
+              {message.stats && (
+                <div className="flex items-center gap-4 text-xs text-gray-500 pt-3 border-t border-gray-200">
+                  <div className="flex items-center gap-1">
+                    <span>⏱️</span>
+                    <span>{message.stats.duration.toFixed(1)}秒</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span>📊</span>
+                    <span>{message.stats.tokens.toLocaleString()} tokens</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span>💰</span>
+                    <span>¥{message.stats.cost.toFixed(4)}</span>
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* 卡片底部提示 */}

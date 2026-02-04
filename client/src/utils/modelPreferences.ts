@@ -6,6 +6,9 @@
 const STORAGE_KEY_PREFIX = 'ai-model-preference-'
 const GLOBAL_MODEL_KEY = 'ai-model-preference-global'
 
+// 默认模型
+export const DEFAULT_MODEL = 'deepseek-chat'
+
 /**
  * 保存文档的模型偏好
  */
@@ -45,10 +48,10 @@ export function saveGlobalModelPreference(model: string): void {
  */
 export function loadGlobalModelPreference(): string {
   try {
-    return localStorage.getItem(GLOBAL_MODEL_KEY) || 'deepseek-chat'
+    return localStorage.getItem(GLOBAL_MODEL_KEY) || DEFAULT_MODEL
   } catch (error) {
     console.error('加载全局模型偏好失败:', error)
-    return 'deepseek-chat'
+    return DEFAULT_MODEL
   }
 }
 
@@ -115,4 +118,19 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
  */
 export function getModelInfo(modelId: string): ModelInfo | undefined {
   return AVAILABLE_MODELS.find(m => m.id === modelId)
+}
+
+
+/**
+ * 获取默认模型
+ */
+export function getDefaultModel(): string {
+  return DEFAULT_MODEL
+}
+
+/**
+ * 检查模型是否支持深度思考
+ */
+export function supportsDeepThink(model: string): boolean {
+  return model.startsWith('deepseek-')
 }

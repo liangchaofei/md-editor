@@ -52,9 +52,20 @@ interface TiptapEditorProps {
   document: Document
   onUpdate: (content: string) => void
   saveStatus?: 'saved' | 'saving' | 'unsaved'
+  initialPrompt?: string
+  initialGenerationMode?: 'full' | 'outline'
+  initialEnableDeepThink?: boolean
 }
 
-function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEditorProps) {
+function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPrompt, initialGenerationMode, initialEnableDeepThink }: TiptapEditorProps) {
+  // 调试日志
+  console.log('📄 TiptapEditor 接收到的参数:', {
+    initialPrompt,
+    initialGenerationMode,
+    initialEnableDeepThink,
+    documentId: document?.id
+  })
+  
   // 版本历史状态
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false)
   
@@ -466,6 +477,9 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved' }: TiptapEdit
             documentId={document.id}
             onSuggestionsReceived={handleSuggestionsReceived}
             onStreamingChange={setIsAIStreaming}
+            initialPrompt={initialPrompt}
+            initialGenerationMode={initialGenerationMode}
+            initialEnableDeepThink={initialEnableDeepThink}
           />
         </div>
       )}

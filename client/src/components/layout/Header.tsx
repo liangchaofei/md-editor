@@ -2,7 +2,8 @@
  * 顶部导航栏组件
  */
 
-import React from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useDocumentStore } from '../../store/documentStore'
 
 interface HeaderProps {
   sidebarOpen: boolean
@@ -10,6 +11,20 @@ interface HeaderProps {
 }
 
 function Header({ sidebarOpen, onToggleSidebar }: HeaderProps) {
+  const navigate = useNavigate()
+  const { createDocument } = useDocumentStore()
+
+  // 创建新文档
+  const handleCreateDocument = async () => {
+    const doc = await createDocument({
+      title: '无标题文档',
+      content: '',
+    })
+    if (doc) {
+      navigate(`/editor/${doc.id}`)
+    }
+  }
+
   return (
     <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4">
       {/* 左侧：Logo 和标题 */}
@@ -46,26 +61,40 @@ function Header({ sidebarOpen, onToggleSidebar }: HeaderProps) {
           </svg>
         </button>
 
-        {/* Logo */}
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500 text-white font-bold">
+        {/* Logo - 点击返回首页 */}
+        <button
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+        >
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 text-white font-bold">
             E
           </div>
           <h1 className="text-lg font-semibold text-gray-900">
             协同编辑器
           </h1>
-        </div>
+        </button>
       </div>
 
       {/* 右侧：操作按钮 */}
       <div className="flex items-center gap-2">
+        {/* 新建文档按钮 */}
+        <button
+          onClick={handleCreateDocument}
+          className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 transition-colors"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          新建文档
+        </button>
+
         {/* 分享按钮 */}
         <button className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
           分享
         </button>
 
         {/* 用户头像 */}
-        <button className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-sm font-medium text-primary-700 hover:bg-primary-200">
+        <button className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 text-sm font-medium text-purple-700 hover:bg-purple-200">
           U
         </button>
       </div>

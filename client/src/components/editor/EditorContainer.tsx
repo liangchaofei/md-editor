@@ -7,7 +7,13 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useDocumentStore } from '../../store/documentStore'
 import TiptapEditor from './TiptapEditor'
 
-function EditorContainer() {
+interface EditorContainerProps {
+  initialPrompt?: string
+  initialGenerationMode?: 'full' | 'outline'
+  initialEnableDeepThink?: boolean
+}
+
+function EditorContainer({ initialPrompt, initialGenerationMode, initialEnableDeepThink }: EditorContainerProps) {
   const { currentDocument, updateDocument } = useDocumentStore()
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
@@ -81,6 +87,9 @@ function EditorContainer() {
       document={currentDocument}
       onUpdate={handleContentUpdate}
       saveStatus={isSaving ? 'saving' : lastSaved ? 'saved' : 'unsaved'}
+      initialPrompt={initialPrompt}
+      initialGenerationMode={initialGenerationMode}
+      initialEnableDeepThink={initialEnableDeepThink}
     />
   )
 }
