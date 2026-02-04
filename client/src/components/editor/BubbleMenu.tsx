@@ -38,10 +38,8 @@ function BubbleMenuComponent({ editor, onAICommand, isDialogOpen }: BubbleMenuPr
         
         setPosition({ top, left })
         setShow(true)
-        console.log('显示菜单', { top, left })
       } else {
         setShow(false)
-        console.log('隐藏菜单')
       }
     }
 
@@ -59,10 +57,8 @@ function BubbleMenuComponent({ editor, onAICommand, isDialogOpen }: BubbleMenuPr
   }
 
   const handleRewrite = (e: React.MouseEvent) => {
-    console.log('🔥 改写按钮被点击 - 事件触发')
     e.preventDefault()
     e.stopPropagation()
-    console.log('🔥 调用 onAICommand', { type: 'rewrite', hasCallback: !!onAICommand })
     
     // 隐藏菜单
     setShow(false)
@@ -72,7 +68,6 @@ function BubbleMenuComponent({ editor, onAICommand, isDialogOpen }: BubbleMenuPr
   }
 
   const handleButtonMouseDown = (e: React.MouseEvent) => {
-    console.log('🖱️ 按钮 mouseDown - 阻止默认行为')
     e.preventDefault()
     e.stopPropagation()
   }
@@ -89,7 +84,6 @@ function BubbleMenuComponent({ editor, onAICommand, isDialogOpen }: BubbleMenuPr
       }}
       onMouseDown={(e) => {
         // 阻止编辑器失去焦点
-        console.log('🖱️ 菜单容器 mouseDown - 阻止默认行为')
         e.preventDefault()
         e.stopPropagation()
       }}

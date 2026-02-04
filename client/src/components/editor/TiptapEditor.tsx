@@ -58,13 +58,7 @@ interface TiptapEditorProps {
 }
 
 function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPrompt, initialGenerationMode, initialEnableDeepThink }: TiptapEditorProps) {
-  // 调试日志
-  console.log('📄 TiptapEditor 接收到的参数:', {
-    initialPrompt,
-    initialGenerationMode,
-    initialEnableDeepThink,
-    documentId: document?.id
-  })
+ 
   
   // 版本历史状态
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false)
@@ -102,7 +96,6 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPromp
   
   // 打开 AI 指令对话框
   const openAICommand = useCallback((type: AICommandType) => {
-    console.log('🎯 TiptapEditor.openAICommand 被调用:', type)
     setAICommandType(type)
     setIsAICommandDialogOpen(true)
   }, [])
@@ -292,11 +285,6 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPromp
   
   // 处理 AI 编辑建议（支持流式输出）
   const handleSuggestionsReceived = useCallback((data: AIEditResponse, isStreaming = false) => {
-    console.log('🎯 TiptapEditor.handleSuggestionsReceived 被调用')
-    console.log('收到 AI 编辑建议:', data)
-    console.log('流式模式:', isStreaming)
-    console.log('editor 是否存在:', !!editor)
-    console.log('addSuggestions 是否存在:', !!addSuggestions)
     
     if (data.changes && data.changes.length > 0) {
       // 如果 AI 返回了多个修改，只取第一个（最相关的）
@@ -306,7 +294,6 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPromp
       
       // 只取第一个修改
       const firstChange = data.changes[0]
-      console.log('📝 第一个修改:', firstChange)
       
       // 转换为新格式
       const formattedChanges = [{
@@ -318,19 +305,15 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPromp
         isStreaming,  // 传递流式标志
       }]
       
-      console.log('📝 格式化后的修改:', formattedChanges)
-      console.log('🚀 准备调用 addSuggestions')
 
       const result = addSuggestions(formattedChanges)
       
-      console.log('📊 addSuggestions 返回结果:', result)
 
       // 如果有错误，显示提示
       if (result.errors && result.errors.length > 0) {
         console.error('❌ 建议定位失败:', result.errors[0])
         return
       } else if (result.success) {
-        console.log('✅ 建议已成功标记')
         
         // 返回第一个建议的 ID（用于流式输出）
         if (result.suggestions && result.suggestions.length > 0) {
@@ -358,48 +341,47 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPromp
         <OfflineBanner isOffline={isOffline} />
 
         {/* 文档标题和连接状态 - 固定高度 */}
-        <div className="flex-shrink-0 border-b border-gray-200 px-8 py-4">
-          <div className="flex items-center justify-between gap-4">
-            {/* 左侧：文档信息 - 允许收缩但优先保留标题 */}
-            <div className="flex-1 min-w-0 overflow-hidden">
-              <h1 className="text-2xl font-bold text-gray-900 truncate">
+        <div className="flex-shrink-0 border-b border-gray-200 px-4 sm:px-8 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            {/* 左侧：文档信息 */}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
                 {document.title}
               </h1>
               <div className="mt-1 text-xs text-gray-500 truncate">
-                <span>
-                  最后更新: {new Date(document.updated_at).toLocaleString('zh-CN')}
-                </span>
+                最后更新: {new Date(document.updated_at).toLocaleString('zh-CN')}
               </div>
             </div>
             
-            {/* 右侧：按钮组 - 不允许收缩，超出时自动换行 */}
-            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+            {/* 右侧：按钮组 */}
+            <div className="flex items-center gap-2 flex-wrap">
               {/* AI 助手按钮 */}
               <button
                 onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border transition-colors ${
                   isAIPanelOpen
                     ? 'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100'
                     : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                 }`}
                 title={isAIPanelOpen ? '收起 AI 助手' : '展开 AI 助手'}
               >
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
-                AI 助手
+                <span className="hidden sm:inline">AI 助手</span>
+                <span className="sm:hidden">AI</span>
               </button>
               
               {/* 版本历史按钮 */}
               <button
                 onClick={() => setIsVersionHistoryOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 whitespace-nowrap"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                 title="版本历史"
               >
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                版本
+                <span className="hidden sm:inline">版本</span>
               </button>
               
               {/* 导出按钮 */}

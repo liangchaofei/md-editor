@@ -105,7 +105,6 @@ export function useOutline(): UseOutlineReturn {
           const { done, value } = await reader.read()
 
           if (done) {
-            console.log('✅ 流式读取完成')
             break
           }
 
@@ -116,14 +115,11 @@ export function useOutline(): UseOutlineReturn {
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const dataStr = line.slice(6)
-              console.log('📦 收到数据:', dataStr.substring(0, 100))
               
               const data = JSON.parse(dataStr)
-              console.log('📦 解析后类型:', data.type)
 
               if (data.type === 'thinking') {
                 // 调用回调函数传递思考过程
-                console.log('💭 收到思考数据')
                 if (onThinking) {
                   onThinking(data.data.thinking || '')
                 } else {

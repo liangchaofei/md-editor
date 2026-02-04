@@ -40,17 +40,11 @@ export function useSuggestions(editor: Editor | null) {
 
       // 使用 getText() 而不是 textContent，确保一致性
       const docText = editor.getText()
-      console.log('📄 文档长度:', docText.length)
-      console.log('🎯 要查找的目标文本:', `"${targetText}"`)
-      console.log('📏 目标文本长度:', targetText.length)
-      console.log('⬅️ 前文:', contextBefore || '(无)')
-      console.log('➡️ 后文:', contextAfter || '(无)')
 
       let result: { from: number; to: number } | null = null
 
       // 优先使用上下文定位（最精确）
       if (contextBefore || contextAfter) {
-        console.log('🎯 策略1: 使用上下文定位')
         result = findTextWithContext(
           docText,
           contextBefore || '',
@@ -59,7 +53,6 @@ export function useSuggestions(editor: Editor | null) {
         )
         
         if (result) {
-          console.log('✅ 上下文定位成功')
         } else {
           console.log('❌ 上下文定位失败，尝试其他策略')
         }
@@ -67,11 +60,9 @@ export function useSuggestions(editor: Editor | null) {
 
       // 如果上下文定位失败，回退到智能匹配
       if (!result) {
-        console.log('🔄 策略2: 回退到智能匹配')
         const smartResult = smartFindText(docText, targetText)
         if (smartResult) {
           result = { from: smartResult.from, to: smartResult.to }
-          console.log('✅ 智能匹配成功')
         } else {
           console.log('❌ 智能匹配失败')
         }
@@ -90,7 +81,6 @@ export function useSuggestions(editor: Editor | null) {
       }
 
       const { from, to } = result
-      console.log('✅ 找到位置:', { from, to })
 
       // 验证位置是否有效
       const docSize = editor.getText().length
@@ -105,13 +95,9 @@ export function useSuggestions(editor: Editor | null) {
 
       // 使用 getText() 提取匹配的文本，确保一致性
       const matchedText = docText.substring(from, to)
-      console.log('📝 匹配的文本:', `"${matchedText}"`)
-      console.log('🎯 目标文本:', `"${targetText}"`)
-      console.log('📏 匹配长度:', matchedText.length, '目标长度:', targetText.length)
       
       // 验证匹配的文本是否正确
       if (matchedText !== targetText) {
-        console.warn('⚠️ 匹配的文本与目标文本不一致，尝试修正...')
         
         // 检查是否匹配到了更多内容
         if (matchedText.includes(targetText)) {
@@ -121,14 +107,11 @@ export function useSuggestions(editor: Editor | null) {
             const adjustedFrom = from + targetIndex
             const adjustedTo = adjustedFrom + targetText.length
             
-            console.log('🔧 调整位置:', { 原始: { from, to }, 调整后: { from: adjustedFrom, to: adjustedTo } })
             
             // 验证调整后的文本
             const adjustedText = editor.state.doc.textBetween(adjustedFrom, adjustedTo, '\n')
-            console.log('📝 调整后的文本:', `"${adjustedText}"`)
             
             if (adjustedText === targetText) {
-              console.log('✅ 位置调整成功')
               result.from = adjustedFrom
               result.to = adjustedTo
             }
@@ -143,9 +126,6 @@ export function useSuggestions(editor: Editor | null) {
       const finalTo = result.to
       const finalMatchedText = docText.substring(finalFrom, finalTo)
       
-      console.log('📍 最终位置:', { from: finalFrom, to: finalTo })
-      console.log('📝 最终匹配文本:', `"${finalMatchedText}"`)
-      console.log('🌊 流式模式:', isStreaming)
 
       const suggestion: SuggestedChange = {
         id,
@@ -165,8 +145,6 @@ export function useSuggestions(editor: Editor | null) {
         // 简化方案：直接使用 state.doc.textBetween 来查找位置
         // 这样可以避免文本位置和文档位置的转换问题
         
-        console.log('🔍 开始在编辑器中查找文本...')
-        console.log('目标文本:', finalMatchedText)
         
         // 在整个文档中搜索匹配的文本
         let docFrom = -1
@@ -180,7 +158,6 @@ export function useSuggestions(editor: Editor | null) {
             if (text === finalMatchedText) {
               docFrom = pos
               docTo = pos + finalMatchedText.length
-              console.log('✅ 找到匹配位置:', { from: docFrom, to: docTo })
               break
             }
           } catch (e) {
@@ -200,7 +177,6 @@ export function useSuggestions(editor: Editor | null) {
         
         // 验证找到的位置
         const verifyText = editor.state.doc.textBetween(docFrom, docTo, '')
-        console.log('📝 验证文本:', `"${verifyText}"`)
         
         if (verifyText !== finalMatchedText) {
           console.error('❌ 验证失败')
@@ -229,7 +205,6 @@ export function useSuggestions(editor: Editor | null) {
         
         // 如果不是流式输出，直接插入完整文本
         if (!isStreaming) {
-          console.log('📝 非流式模式，直接插入完整文本')
           editor
             .chain()
             .focus()
@@ -246,7 +221,6 @@ export function useSuggestions(editor: Editor | null) {
           console.log('🌊 流式模式，等待流式输出')
         }
 
-        console.log('✅ 成功添加 diff 标记')
         
         // 存储文档位置
         suggestion.from = docFrom
@@ -282,13 +256,11 @@ export function useSuggestions(editor: Editor | null) {
         return
       }
 
-      console.log('🌊 流式追加字符:', char, '当前 replacement 长度:', suggestion.replacement.length)
 
       // 在原文后面（空格之后）追加字符
       const currentLength = suggestion.replacement.length
       const insertPos = suggestion.to + 1 + currentLength
       
-      console.log('📍 插入位置:', insertPos, '= suggestion.to(', suggestion.to, ') + 1 + currentLength(', currentLength, ')')
       
       try {
         editor
@@ -310,7 +282,6 @@ export function useSuggestions(editor: Editor | null) {
         )
         updateSuggestions(updatedSuggestions)
         
-        console.log('✅ 字符追加成功，新长度:', suggestion.replacement.length + 1)
       } catch (error) {
         console.error('❌ 追加字符失败:', error)
       }
@@ -328,11 +299,7 @@ export function useSuggestions(editor: Editor | null) {
       const suggestion = suggestionsRef.current.find(s => s.id === id)
       if (!suggestion) return
 
-      console.log('🎯 接受建议:', suggestion)
-      console.log('  - 原文位置:', { from: suggestion.from, to: suggestion.to })
-      console.log('  - 原文内容:', suggestion.target)
-      console.log('  - 新文本:', suggestion.replacement)
-
+    
       // 策略：使用 deleteRange + insertContentAt 一次性完成替换
       // 注意：suggestion.from 和 suggestion.to 已经是文档位置（不是文本位置）
       
@@ -344,12 +311,9 @@ export function useSuggestions(editor: Editor | null) {
       const newTextStart = spacePos + 1
       const newTextEnd = newTextStart + suggestion.replacement.length
       
-      console.log('  - 完整范围:', { from: suggestion.from, to: newTextEnd })
-      console.log('  - 将替换为:', suggestion.replacement)
-      
+   
       // 验证当前内容
       const currentContent = editor.state.doc.textBetween(suggestion.from, newTextEnd, '\n')
-      console.log('  - 当前内容:', `"${currentContent}"`)
       
       // 一次性替换整个范围（原文 + 空格 + 新文本）为纯文本
       editor
@@ -359,7 +323,6 @@ export function useSuggestions(editor: Editor | null) {
         .insertContentAt(suggestion.from, suggestion.replacement)
         .run()
       
-      console.log('  - 已完成替换')
 
       // 移除 suggestion 标记
       editor.commands.removeSuggestion(id)
@@ -370,7 +333,7 @@ export function useSuggestions(editor: Editor | null) {
       )
       updateSuggestions(updatedSuggestions)
       
-      console.log('✅ 接受建议完成')
+
     },
     [editor, updateSuggestions]
   )
@@ -385,8 +348,6 @@ export function useSuggestions(editor: Editor | null) {
       const suggestion = suggestionsRef.current.find(s => s.id === id)
       if (!suggestion) return
 
-      console.log('🎯 拒绝建议:', suggestion)
-      console.log('  - 原文位置:', { from: suggestion.from, to: suggestion.to })
 
       // 1. 移除原文的删除线
       editor
@@ -402,7 +363,6 @@ export function useSuggestions(editor: Editor | null) {
       const newTextStart = suggestion.to  // 空格的位置
       const newTextEnd = newTextStart + 1 + suggestion.replacement.length  // +1 是空格
       
-      console.log('  - 删除范围:', { from: newTextStart, to: newTextEnd })
       
       editor
         .chain()
@@ -420,7 +380,6 @@ export function useSuggestions(editor: Editor | null) {
       )
       updateSuggestions(updatedSuggestions)
       
-      console.log('✅ 拒绝建议完成')
     },
     [editor, updateSuggestions]
   )

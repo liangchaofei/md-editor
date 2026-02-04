@@ -31,11 +31,6 @@ function HomePage() {
   const handleStartWriting = async () => {
     if (!input.trim()) return
 
-    console.log('🏠 HomePage 开始创作:', {
-      input,
-      generationMode,
-      enableDeepThink
-    })
 
     // 创建新文档并跳转到编辑器，同时传递初始提示词
     const { createDocument } = useDocumentStore.getState()
@@ -44,7 +39,6 @@ function HomePage() {
       content: '',
     })
     
-    console.log('📄 文档创建完成:', doc)
     
     if (doc) {
       const navigationState = {
@@ -53,11 +47,7 @@ function HomePage() {
         enableDeepThink,
       }
       
-      console.log('🚀 准备跳转到编辑器:', {
-        path: `/editor/${doc.id}`,
-        state: navigationState
-      })
-      
+   
       // 跳转到编辑器，并通过 state 传递初始提示词、模式和深度思考开关
       navigate(`/editor/${doc.id}`, {
         state: navigationState

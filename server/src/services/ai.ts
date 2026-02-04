@@ -34,13 +34,11 @@ function createOpenAIClient(model: string) {
   if (model.startsWith('moonshot-')) {
     apiKey = process.env.MOONSHOT_API_KEY || config.apiKey
     baseURL = 'https://api.moonshot.cn/v1'
-    console.log('🌙 使用 Kimi API')
   }
   // DeepSeek 模型
   else if (model.startsWith('deepseek-')) {
     apiKey = process.env.DEEPSEEK_API_KEY || config.apiKey
     baseURL = 'https://api.deepseek.com'
-    console.log('🤖 使用 DeepSeek API')
   }
   
   return new OpenAI({
@@ -69,13 +67,6 @@ export async function* streamChat(options: ChatOptions) {
   const openai = createOpenAIClient(selectedModel)
 
   try {
-    console.log('🤖 开始 AI 请求:', {
-      model: selectedModel,
-      messageCount: messages.length,
-      temperature,
-      maxTokens,
-    })
-
     const stream = await openai.chat.completions.create({
       model: selectedModel,
       messages,
@@ -93,13 +84,11 @@ export async function* streamChat(options: ChatOptions) {
       if (chunkCount < 3) {
         const chunkLog = JSON.stringify(chunk, null, 2)
         logFile += `\n=== Chunk ${chunkCount + 1} ===\n${chunkLog}\n`
-        console.log(`📦 Chunk ${chunkCount + 1}:`, chunkLog)
       }
       
       // 处理思考过程（reasoning_content）- DeepSeek 特有
       if (delta?.reasoning_content) {
         chunkCount++
-        console.log('💭 [思考]:', delta.reasoning_content.substring(0, 50))
         yield JSON.stringify({
           type: 'reasoning',
           content: delta.reasoning_content,
@@ -117,12 +106,9 @@ export async function* streamChat(options: ChatOptions) {
     }
     
     if (logFile) {
-      console.log('\n' + '='.repeat(50))
-      console.log('前3个 chunk 的完整结构已记录在上方')
-      console.log('='.repeat(50) + '\n')
+    
     }
 
-    console.log('✅ AI 请求完成，共生成', chunkCount, '个 chunk')
   } catch (error: any) {
     console.error('❌ AI 服务错误:', {
       message: error.message,

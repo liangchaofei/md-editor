@@ -22,17 +22,14 @@ export function createHocuspocusServer() {
       new Database({
         // 从数据库加载文档
         fetch: async ({ documentName }) => {
-          console.log(`📄 加载文档: ${documentName}`)
           
           try {
             const doc = db.prepare('SELECT yjs_state FROM documents WHERE id = ?').get(documentName)
             
             if (doc && (doc as any).yjs_state) {
-              console.log(`✅ 文档 ${documentName} 已从数据库加载`)
               return (doc as any).yjs_state
             }
             
-            console.log(`📝 文档 ${documentName} 不存在，创建新文档`)
             return null
           } catch (error) {
             console.error(`❌ 加载文档失败:`, error)
@@ -42,7 +39,6 @@ export function createHocuspocusServer() {
 
         // 保存文档到数据库
         store: async ({ documentName, state }) => {
-          console.log(`💾 保存文档: ${documentName}`)
           
           try {
             // 更新 yjs_state 字段
@@ -52,7 +48,6 @@ export function createHocuspocusServer() {
               WHERE id = ?
             `).run(state, documentName)
             
-            console.log(`✅ 文档 ${documentName} 已保存到数据库`)
           } catch (error) {
             console.error(`❌ 保存文档失败:`, error)
             throw error

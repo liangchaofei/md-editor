@@ -30,7 +30,6 @@ function EditorPage() {
   // 只在第一次有 state 时保存
   useEffect(() => {
     if (state && !initialStateRef.current) {
-      console.log('💾 保存初始状态:', state)
       initialStateRef.current = state
     }
   }, [state])
@@ -38,12 +37,6 @@ function EditorPage() {
   // 使用保存的初始状态
   const initialState = initialStateRef.current
   
-  // 调试日志
-  console.log('📍 EditorPage 渲染:', {
-    locationState: state,
-    savedState: initialStateRef.current,
-    finalState: initialState
-  })
 
   // 获取文档列表
   useEffect(() => {

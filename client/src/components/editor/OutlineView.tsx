@@ -44,7 +44,6 @@ function OutlineView({
             value={outline.title}
             onChange={(e) => {
               // Update outline title (would need to be passed as a prop)
-              console.log('Title update:', e.target.value)
             }}
             className="w-full text-base font-medium px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="文档标题"

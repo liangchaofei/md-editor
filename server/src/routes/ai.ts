@@ -19,7 +19,6 @@ function extractChangesFromText(text: string, documentContent: string): {
   reasoning: string
   changes: Array<{ target: string; replacement: string; description?: string }>
 } | null {
-  console.log('🔍 开始备用解析...')
   
   // 尝试查找类似 "将 XXX 改为 YYY" 的模式
   const patterns = [
@@ -45,7 +44,6 @@ function extractChangesFromText(text: string, documentContent: string): {
           description: `修改: ${target} → ${replacement}`,
         })
         
-        console.log(`✅ 提取到修改: "${target}" → "${replacement}"`)
       } else {
         console.log(`⚠️ 文档中未找到: "${target}"`)
       }
@@ -309,8 +307,6 @@ router.post('/edit', async (ctx) => {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
   
-  console.log('📄 原始文档内容（前200字符）:', documentContent.substring(0, 200))
-  console.log('🧹 清理后内容（前200字符）:', cleanDocumentContent.substring(0, 200))
 
   // 构建 Prompt - 强调只返回最相关的一个修改
   const systemPrompt = `你是一个专业的文档编辑助手。用户会告诉你要修改文档的哪些部分。
@@ -449,12 +445,7 @@ ${cleanDocumentContent}
       }
     }
     
-    console.log('📊 累积内容统计:')
-    console.log('  - 总长度:', accumulatedContent.length)
-    console.log('  - 前100字符:', accumulatedContent.substring(0, 100))
-    console.log('  - 后100字符:', accumulatedContent.substring(Math.max(0, accumulatedContent.length - 100)))
-
-    // 尝试解析累积的内容为 JSON
+   
     try {
       // 提取 JSON（可能被包裹在 markdown 代码块中）
       let jsonStr = accumulatedContent.trim()
@@ -464,39 +455,29 @@ ${cleanDocumentContent}
         throw new Error('AI 未返回有效的修改建议')
       }
       
-      console.log('🔍 尝试解析 AI 返回内容')
-      console.log('原始内容长度:', jsonStr.length)
-      console.log('原始内容前200字符:', jsonStr.substring(0, 200))
+     
       
       // 移除可能的 markdown 代码块标记
       if (jsonStr.startsWith('```json')) {
         jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        console.log('✂️ 移除了 ```json 标记')
       } else if (jsonStr.startsWith('```')) {
         jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        console.log('✂️ 移除了 ``` 标记')
       }
       
       // 尝试查找 JSON 对象
       const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
         jsonStr = jsonMatch[0]
-        console.log('✂️ 提取了 JSON 对象')
       }
       
-      console.log('处理后内容长度:', jsonStr.length)
-      console.log('处理后内容:', jsonStr.substring(0, 500))
-      
+     
       const result = JSON.parse(jsonStr)
-      console.log('✅ JSON 解析成功')
       
       // 验证结果格式
       if (result.changes && Array.isArray(result.changes)) {
-        console.log(`📊 找到 ${result.changes.length} 个修改建议`)
         
         // 只取第一个修改建议
         const firstChange = result.changes[0]
-        console.log('📝 第一个修改:', JSON.stringify(firstChange, null, 2))
         
         // 暂时先不做流式输出，直接返回完整数据
         // 后续可以优化为流式输出
@@ -505,7 +486,6 @@ ${cleanDocumentContent}
           content: result,
         })}\n\n`)
         
-        console.log('✅ 已发送结构化数据')
       } else {
         console.warn('⚠️ JSON 格式不正确，缺少 changes 数组')
       }
@@ -514,11 +494,10 @@ ${cleanDocumentContent}
       console.error('累积内容:', accumulatedContent.substring(0, 500))
       
       // 尝试备用方案：从文本中提取修改信息
-      console.log('🔄 尝试备用解析方案...')
+
       try {
         const backupResult = extractChangesFromText(accumulatedContent, cleanDocumentContent)
         if (backupResult && backupResult.changes.length > 0) {
-          console.log('✅ 备用方案成功，提取到修改建议')
           ctx.res.write(`data: ${JSON.stringify({
             type: 'structured',
             content: backupResult,
@@ -629,9 +608,6 @@ ${prompt}
   let hasError = false
 
   try {
-    console.log('🎯 开始生成大纲')
-    console.log('  - 使用模型:', model)
-    
     // 调用 AI 服务（支持思考过程）
     const stream = streamChat({
       messages: [
@@ -662,21 +638,13 @@ ${prompt}
       }
     }
 
-    console.log('📊 流式传输结束')
-    console.log('  - 是否有思考过程:', hasThinking)
-    console.log('  - 累积内容长度:', accumulatedContent.length)
-    console.log('  - 累积内容（完整）:')
-    console.log(accumulatedContent)
+  
 
     // 解析累积的内容为 JSON
     try {
       let jsonStr = accumulatedContent.trim()
       
-      console.log('📊 累积内容统计:')
-      console.log('  - 总长度:', jsonStr.length)
-      console.log('  - 前200字符:', jsonStr.substring(0, 200))
-      console.log('  - 后200字符:', jsonStr.substring(Math.max(0, jsonStr.length - 200)))
-      
+   
       if (jsonStr.length === 0) {
         console.error('❌ 累积内容为空，AI 可能只返回了思考过程')
         throw new Error('AI 未返回大纲内容，请重试')
@@ -685,10 +653,8 @@ ${prompt}
       // 移除可能的 markdown 代码块标记
       if (jsonStr.startsWith('```json')) {
         jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        console.log('✂️ 移除了 ```json 标记')
       } else if (jsonStr.startsWith('```')) {
         jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        console.log('✂️ 移除了 ``` 标记')
       }
       
       // 尝试查找 JSON 对象
@@ -717,14 +683,11 @@ ${prompt}
         throw new Error(`AI 返回的 JSON 不完整（大括号: ${openBraces}/${closeBraces}, 方括号: ${openBrackets}/${closeBrackets}）。可能是生成被中断或超出 Token 限制。请尝试简化需求或重试。`)
       }
       
-      console.log('🔍 准备解析的 JSON (前500字符):', jsonStr.substring(0, 500))
       
       const result = JSON.parse(jsonStr)
-      console.log('✅ JSON 解析成功')
       
       // 验证结果格式
       if (result.nodes && Array.isArray(result.nodes)) {
-        console.log(`📊 找到 ${result.nodes.length} 个大纲节点`)
         
         // 发送大纲数据
         ctx.res.write(`data: ${JSON.stringify({
@@ -732,7 +695,6 @@ ${prompt}
           data: { outline: result }
         })}\n\n`)
         
-        console.log('✅ 已发送大纲数据')
       } else {
         console.warn('⚠️ JSON 格式不正确，缺少 nodes 数组')
         console.log('解析结果:', JSON.stringify(result, null, 2))

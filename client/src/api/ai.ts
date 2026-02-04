@@ -72,8 +72,7 @@ export async function streamChatAPI(options: ChatOptions): Promise<void> {
         try {
           const parsed = JSON.parse(data)
           
-          // 调试日志
-          console.log('📥 收到数据:', parsed)
+     
           
           if (parsed.error) {
             onError?.(parsed.error)
@@ -82,12 +81,10 @@ export async function streamChatAPI(options: ChatOptions): Promise<void> {
           
           // 处理思考过程
           if (parsed.type === 'reasoning' && parsed.content) {
-            console.log('💭 思考:', parsed.content)
             onReasoning?.(parsed.content)
           }
           // 处理正常内容
           else if (parsed.type === 'content' && parsed.content) {
-            console.log('📝 正文:', parsed.content)
             onChunk?.(parsed.content)
           }
           // 兼容旧格式（直接返回 content）
@@ -304,17 +301,14 @@ export async function executeAIEdit(params: {
         try {
           const parsed = JSON.parse(data)
 
-          console.log('📥 executeAIEdit 收到数据:', parsed)
 
           if (parsed.type === 'reasoning' && onReasoning) {
             onReasoning(parsed.content)
           } else if (parsed.type === 'content' && onChunk) {
             onChunk(parsed.content)
           } else if (parsed.type === 'structured' && onStructured) {
-            console.log('📝 收到 structured 数据')
             onStructured(parsed.content)
           } else if (parsed.type === 'replacement' && onReplacement) {
-            console.log('🌊 收到 replacement 字符:', parsed.content)
             onReplacement(parsed.content)
           } else if (parsed.type === 'error') {
             throw new Error(parsed.content)

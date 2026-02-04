@@ -13,12 +13,6 @@ export function findTextPosition(
   docText: string,
   target: string
 ): { from: number; to: number } | null {
-  console.group('🔍 文本定位调试')
-  console.log('📄 文档长度:', docText.length)
-  console.log('🎯 目标文本:', target)
-  console.log('📝 目标长度:', target.length)
-  console.log('📄 文档前200字符:', docText.substring(0, 200))
-  console.log('📄 文档后200字符:', docText.substring(docText.length - 200))
 
   // 规范化文本：去除多余空格，统一换行
   const normalizeText = (text: string) => {
@@ -31,56 +25,42 @@ export function findTextPosition(
   const normalizedDoc = normalizeText(docText)
   const normalizedTarget = normalizeText(target)
 
-  console.log('🔄 规范化后目标:', normalizedTarget)
 
   // 1. 尝试精确匹配
   let index = docText.indexOf(target)
   if (index !== -1) {
-    console.log('✅ 策略1: 精确匹配成功')
-    console.log('   位置:', { from: index, to: index + target.length })
-    console.log('   匹配文本:', docText.substring(index, index + target.length))
+   
     console.groupEnd()
     return {
       from: index,
       to: index + target.length,
     }
   }
-  console.log('❌ 策略1: 精确匹配失败')
 
   // 2. 尝试规范化后匹配（在原文档中查找规范化的目标）
   index = docText.indexOf(normalizedTarget)
   if (index !== -1) {
-    console.log('✅ 策略2: 规范化目标匹配成功')
-    console.log('   位置:', { from: index, to: index + normalizedTarget.length })
-    console.log('   匹配文本:', docText.substring(index, index + normalizedTarget.length))
-    console.groupEnd()
+   
     return {
       from: index,
       to: index + normalizedTarget.length,
     }
   }
-  console.log('❌ 策略2: 规范化目标匹配失败')
 
   // 3. 尝试在规范化文档中查找规范化目标
   index = normalizedDoc.indexOf(normalizedTarget)
   if (index !== -1) {
-    console.log('✅ 策略3: 双规范化匹配成功')
-    console.log('   规范化位置:', { from: index, to: index + normalizedTarget.length })
     
     // 需要映射回原始文档的位置
     // 简单策略：在原文档中查找相似的文本
     const result = findSimilarText(docText, normalizedTarget, 0.8)
     if (result) {
-      console.log('   映射回原文档:', { from: result.from, to: result.to })
-      console.log('   匹配文本:', docText.substring(result.from, result.to))
-      console.groupEnd()
       return {
         from: result.from,
         to: result.to,
       }
     }
   }
-  console.log('❌ 策略3: 双规范化匹配失败')
 
   // 4. 尝试部分匹配（去掉标点符号）
   const removePunctuation = (text: string) => {
@@ -91,11 +71,9 @@ export function findTextPosition(
   const docNoPunc = removePunctuation(docText)
   const targetNoPunc = removePunctuation(target)
 
-  console.log('🔄 去标点后目标:', targetNoPunc.substring(0, 50))
 
   index = docNoPunc.indexOf(targetNoPunc)
   if (index !== -1) {
-    console.log('✅ 策略4: 去标点匹配成功')
     
     // 映射回原文档位置（需要考虑标点符号）
     let originalIndex = 0
@@ -119,35 +97,20 @@ export function findTextPosition(
       to++
     }
     
-    console.log('   映射位置:', { from, to })
-    console.log('   匹配文本:', docText.substring(from, to))
     console.groupEnd()
     return { from, to }
   }
-  console.log('❌ 策略4: 去标点匹配失败')
 
   // 5. 尝试模糊匹配（使用相似度）
-  console.log('🔄 尝试模糊匹配...')
   const result = findSimilarText(docText, target, 0.6)
   if (result) {
-    console.log('✅ 策略5: 模糊匹配成功')
-    console.log('   相似度:', result.similarity)
-    console.log('   位置:', { from: result.from, to: result.to })
-    console.log('   匹配文本:', docText.substring(result.from, result.to))
-    console.groupEnd()
+   
     return {
       from: result.from,
       to: result.to,
     }
   }
-  console.log('❌ 策略5: 模糊匹配失败')
 
-  console.error('❌ 所有匹配策略均失败')
-  console.error('💡 建议检查:')
-  console.error('   1. AI 返回的 target 是否包含文档中不存在的字符')
-  console.error('   2. 文档内容是否正确提取（检查 editor.getText()）')
-  console.error('   3. 是否有特殊的空格或换行符')
-  console.groupEnd()
   
   return null
 }
@@ -288,9 +251,7 @@ export function smartFindText(
   docText: string,
   keywords: string
 ): { from: number; to: number; matchedText: string } | null {
-  console.group('🔍 智能文本查找')
-  console.log('📄 文档长度:', docText.length)
-  console.log('🔑 关键词:', keywords)
+
   
   // 1. 尝试直接查找关键词
   let index = docText.indexOf(keywords)
@@ -310,10 +271,7 @@ export function smartFindText(
     }
     
     const matchedText = docText.substring(from, to)
-    console.log('✅ 直接匹配成功')
-    console.log('   匹配文本:', matchedText)
-    console.log('   位置:', { from, to })
-    console.groupEnd()
+   
     
     return { from, to, matchedText }
   }
@@ -325,7 +283,6 @@ export function smartFindText(
   
   index = normalizedDoc.indexOf(normalizedKeywords)
   if (index !== -1) {
-    console.log('✅ 规范化匹配成功')
     // 映射回原文档位置（简化处理）
     const result = findTextPosition(docText, keywords)
     console.groupEnd()
@@ -344,11 +301,7 @@ export function smartFindText(
       // 至少匹配70%的关键词
       const from = docText.indexOf(paragraph)
       const to = from + paragraph.length
-      
-      console.log('✅ 分词匹配成功')
-      console.log('   匹配段落:', paragraph.substring(0, 50))
-      console.log('   位置:', { from, to })
-      console.groupEnd()
+   
       
       return { from, to, matchedText: paragraph }
     }
@@ -370,15 +323,10 @@ export function findTextWithContext(
   targetText: string,
   contextAfter: string
 ): { from: number; to: number } | null {
-  console.group('🎯 上下文精确定位')
-  console.log('📄 文档长度:', docText.length)
-  console.log('⬅️ 前文:', contextBefore)
-  console.log('🎯 目标:', targetText)
-  console.log('➡️ 后文:', contextAfter)
+  
   
   // 构建完整的搜索模式
   const fullPattern = contextBefore + targetText + contextAfter
-  console.log('🔍 完整模式:', fullPattern)
   
   // 1. 尝试精确匹配完整模式
   let index = docText.indexOf(fullPattern)
@@ -386,10 +334,7 @@ export function findTextWithContext(
     const from = index + contextBefore.length
     const to = from + targetText.length
     
-    console.log('✅ 精确匹配成功')
-    console.log('   位置:', { from, to })
-    console.log('   匹配文本:', docText.substring(from, to))
-    console.groupEnd()
+
     
     return { from, to }
   }
@@ -404,10 +349,7 @@ export function findTextWithContext(
       
       // 验证目标文本是否匹配
       if (actualTarget === targetText || actualTarget.trim() === targetText.trim()) {
-        console.log('✅ 前文定位成功')
-        console.log('   位置:', { from: targetStart, to: targetEnd })
-        console.groupEnd()
-        
+    
         return { from: targetStart, to: targetEnd }
       }
     }
@@ -424,10 +366,6 @@ export function findTextWithContext(
         const actualTarget = docText.substring(targetStart, targetEnd)
         
         if (actualTarget === targetText || actualTarget.trim() === targetText.trim()) {
-          console.log('✅ 后文定位成功')
-          console.log('   位置:', { from: targetStart, to: targetEnd })
-          console.groupEnd()
-          
           return { from: targetStart, to: targetEnd }
         }
       }
@@ -435,12 +373,8 @@ export function findTextWithContext(
   }
   
   // 4. 尝试直接查找目标文本（最简单的方式）
-  console.log('🔄 尝试直接查找目标文本...')
   index = docText.indexOf(targetText)
   if (index !== -1) {
-    console.log('✅ 直接查找成功')
-    console.log('   位置:', { from: index, to: index + targetText.length })
-    console.groupEnd()
     return { from: index, to: index + targetText.length }
   }
   
@@ -451,7 +385,6 @@ export function findTextWithContext(
   
   index = normalizedDoc.indexOf(normalizedPattern)
   if (index !== -1) {
-    console.log('✅ 规范化匹配成功')
     // 简化处理：使用原始查找
     const result = findTextPosition(docText, targetText)
     console.groupEnd()
