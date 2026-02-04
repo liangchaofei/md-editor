@@ -434,16 +434,21 @@ ${cleanDocumentContent}
       // 我们需要累积 content 部分来提取 JSON
       if (parsed.type === 'reasoning') {
         // 思考过程，转发但不累积（因为不包含 JSON）
+        console.log('💭 收到思考过程（前50字符）:', parsed.content.substring(0, 50))
         ctx.res.write(`data: ${chunk}\n\n`)
       } else if (parsed.type === 'content') {
         // 正文内容，累积并转发
         accumulatedContent += parsed.content
+        console.log('📝 累积内容（前50字符）:', accumulatedContent.substring(0, 50))
         ctx.res.write(`data: ${chunk}\n\n`)
       } else {
         // 其他类型，直接转发
         ctx.res.write(`data: ${chunk}\n\n`)
       }
     }
+    
+    console.log('✅ 流式输出完成，累积内容长度:', accumulatedContent.length)
+    console.log('📄 累积内容（前200字符）:', accumulatedContent.substring(0, 200))
     
    
     try {
@@ -475,9 +480,6 @@ ${cleanDocumentContent}
       
       // 验证结果格式
       if (result.changes && Array.isArray(result.changes)) {
-        
-        // 只取第一个修改建议
-        const firstChange = result.changes[0]
         
         // 暂时先不做流式输出，直接返回完整数据
         // 后续可以优化为流式输出
@@ -619,14 +621,12 @@ ${prompt}
     })
 
     let accumulatedContent = ''
-    let hasThinking = false
 
     for await (const chunk of stream) {
       const parsed = JSON.parse(chunk)
       
       // 转发思考过程
       if (parsed.type === 'reasoning') {
-        hasThinking = true
         const thinkingData = JSON.stringify({
           type: 'thinking',
           data: { thinking: parsed.content }

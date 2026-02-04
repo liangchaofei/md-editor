@@ -169,25 +169,36 @@ function HomePage() {
                 </button>
 
                 {/* 深度思考开关 */}
-                <button
-                  onClick={() => setEnableDeepThink(!enableDeepThink)}
-                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                    enableDeepThink
-                      ? 'bg-purple-100 text-purple-700 border border-purple-300'
-                      : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-                  }`}
-                  title={enableDeepThink ? '已启用深度思考' : '点击启用深度思考'}
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  深度思考
-                  {enableDeepThink && (
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                <div className="relative group">
+                  <button
+                    onClick={() => setEnableDeepThink(!enableDeepThink)}
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                      enableDeepThink
+                        ? 'bg-purple-100 text-purple-700 border border-purple-300'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                    title={enableDeepThink ? '已启用深度思考' : '点击启用深度思考'}
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                     </svg>
-                  )}
-                </button>
+                    深度思考
+                    {enableDeepThink && (
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </button>
+                  
+                  {/* 提示信息 */}
+                  <div className="hidden group-hover:block absolute left-0 bottom-full mb-2 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-50">
+                    <div className="mb-1 font-medium">深度思考模式</div>
+                    <div className="text-gray-300">
+                      启用后将使用 DeepSeek Reasoner 模型，提供更深入的思考过程和推理能力，适合复杂任务。
+                    </div>
+                    <div className="absolute left-4 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                  </div>
+                </div>
               </div>
 
               {/* 右侧：附件和发送按钮 */}

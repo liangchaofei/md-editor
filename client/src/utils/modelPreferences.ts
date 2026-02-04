@@ -130,7 +130,8 @@ export function getDefaultModel(): string {
 
 /**
  * 检查模型是否支持深度思考
+ * 只有 deepseek-reasoner 支持深度思考
  */
 export function supportsDeepThink(model: string): boolean {
-  return model.startsWith('deepseek-')
+  return model === 'deepseek-reasoner'
 }
