@@ -139,6 +139,46 @@ export const slashCommandItems: CommandItem[] = [
     },
     aliases: ['task', 'todo', 'checkbox', '待办', '任务'],
   },
+  {
+    title: '数学公式',
+    description: '插入 LaTeX 公式',
+    icon: '∑',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run()
+      const latex = window.prompt('输入 LaTeX 公式:')
+      if (latex) {
+        editor.chain().focus().insertContent(`$${latex}$`).run()
+      }
+    },
+    aliases: ['math', 'formula', 'latex', '公式', '数学'],
+  },
+  {
+    title: 'Mermaid 图表',
+    description: '插入流程图/时序图',
+    icon: '📊',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setMermaid({ code: 'graph TD\n  A[开始] --> B[结束]' }).run()
+    },
+    aliases: ['mermaid', 'diagram', 'flowchart', '流程图', '图表'],
+  },
+  {
+    title: '视频',
+    description: '插入视频',
+    icon: '🎬',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setVideo({ src: '' }).run()
+    },
+    aliases: ['video', 'shipin', '视频'],
+  },
+  {
+    title: '音频',
+    description: '插入音频',
+    icon: '🎵',
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setAudio({ src: '' }).run()
+    },
+    aliases: ['audio', 'yinpin', '音频', '音乐'],
+  },
 ]
 
 // Suggestion 配置

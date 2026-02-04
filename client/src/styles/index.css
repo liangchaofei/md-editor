@@ -530,3 +530,77 @@
 .ProseMirror > * {
   position: relative;
 }
+
+/* 数学公式样式 */
+.math-node {
+  @apply inline-block px-1;
+}
+
+.math-node .katex {
+  @apply text-base;
+}
+
+.math-node .katex-display {
+  @apply my-4;
+}
+
+/* Mermaid 图表样式 */
+.mermaid-wrapper {
+  @apply my-4;
+}
+
+.mermaid-container {
+  @apply transition-all duration-200;
+}
+
+.mermaid-container.selected {
+  @apply shadow-lg;
+}
+
+.mermaid-chart svg {
+  @apply max-w-full h-auto;
+}
+
+/* 视频样式 */
+.video-wrapper {
+  @apply my-4;
+}
+
+.video-container {
+  @apply transition-all duration-200;
+}
+
+.video-container.selected {
+  @apply shadow-lg;
+}
+
+.video-player iframe,
+.video-player video {
+  @apply w-full h-full;
+}
+
+/* 音频样式 */
+.audio-wrapper {
+  @apply my-4;
+}
+
+.audio-container {
+  @apply transition-all duration-200;
+}
+
+.audio-container.selected {
+  @apply shadow-lg;
+}
+
+/* 富媒体内容通用样式 */
+.ProseMirror [data-type="mermaid"],
+.ProseMirror [data-type="video"],
+.ProseMirror [data-type="audio"] {
+  @apply cursor-pointer;
+}
+
+.ProseMirror [data-type="mermaid"]:hover,
+.ProseMirror [data-type="video"]:hover,
+.ProseMirror [data-type="audio"]:hover {
+  @apply opacity-90;
+}

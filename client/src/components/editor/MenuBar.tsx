@@ -290,6 +290,65 @@ function MenuBar({ editor, onAICommand, isAIStreaming = false }: MenuBarProps) {
         {/* 图片上传 */}
         <ImageUpload editor={editor} />
 
+        {/* 数学公式 */}
+        <button
+          onMouseDown={(e) => {
+            e.preventDefault()
+            const latex = prompt('输入 LaTeX 公式:')
+            if (latex) {
+              editor.chain().focus().insertContent(`$${latex}$`).run()
+            }
+          }}
+          className="rounded p-2 hover:bg-gray-200"
+          title="插入数学公式"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+        </button>
+
+        {/* Mermaid 图表 */}
+        <button
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().setMermaid({ code: 'graph TD\n  A[开始] --> B[结束]' }).run()
+          }}
+          className="rounded p-2 hover:bg-gray-200"
+          title="插入 Mermaid 图表"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        </button>
+
+        {/* 视频 */}
+        <button
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().setVideo({ src: '' }).run()
+          }}
+          className="rounded p-2 hover:bg-gray-200"
+          title="插入视频"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        </button>
+
+        {/* 音频 */}
+        <button
+          onMouseDown={(e) => {
+            e.preventDefault()
+            editor.chain().focus().setAudio({ src: '' }).run()
+          }}
+          className="rounded p-2 hover:bg-gray-200"
+          title="插入音频"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+          </svg>
+        </button>
+
         {/* 任务列表 */}
         <button
           onMouseDown={(e) => {

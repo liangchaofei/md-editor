@@ -25,7 +25,12 @@ import { CustomKeymap } from '../../extensions/CustomKeymap'
 import { SlashCommands, slashCommandSuggestion } from '../../extensions/SlashCommands'
 import { Highlight } from '../../extensions/Highlight'
 import { Suggestion } from '../../extensions/Suggestion'
+import { Mathematics } from '../../extensions/Mathematics'
+import { MermaidNode } from '../../extensions/MermaidNode'
+import { VideoNode } from '../../extensions/VideoNode'
+import { AudioNode } from '../../extensions/AudioNode'
 import { lowlight } from '../../utils/lowlight'
+import 'katex/dist/katex.min.css'
 import MenuBar from './MenuBar'
 import EditorStatusBar from './EditorStatusBar'
 import ConnectionStatus from './ConnectionStatus'
@@ -178,6 +183,14 @@ function TiptapEditor({ document, onUpdate, saveStatus = 'unsaved', initialPromp
       }),
       // AI 修改建议标记
       Suggestion,
+      // 数学公式
+      Mathematics,
+      // Mermaid 图表
+      MermaidNode,
+      // 视频
+      VideoNode,
+      // 音频
+      AudioNode,
       // 拖拽光标
       Dropcursor.configure({
         color: '#3b82f6',
